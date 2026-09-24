@@ -1,0 +1,7 @@
+SHANO SHAN repair verification
+
+Customer TypeScript check: PASSED (global TypeScript, --noEmit --skipLibCheck)
+Admin TypeScript check: PASSED (global TypeScript, --noEmit --skipLibCheck)
+Worker TypeScript syntax transpile check: PASSED (TypeScript transpileModule)
+
+Full Vite production build was not executed in this container because the archived dependency set lacks the Linux Rolldown native optional package. Source TypeScript for customer/admin passed successfully.

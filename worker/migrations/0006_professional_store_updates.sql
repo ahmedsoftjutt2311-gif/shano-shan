@@ -1,5 +1,4 @@
 -- Additive production-safe migration. No existing rows are deleted or reset.
-ALTER TABLE orders ADD COLUMN province TEXT;
 ALTER TABLE payments ADD COLUMN rejection_reason TEXT;
 ALTER TABLE payments ADD COLUMN verification_receipt_public_id TEXT;
 ALTER TABLE payments ADD COLUMN verification_receipt_url TEXT;

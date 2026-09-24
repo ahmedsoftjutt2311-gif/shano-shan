@@ -1740,3 +1740,14 @@ body{touch-action:pan-y}
 .image-lightbox img{max-width:96vw;max-height:90vh;width:auto;height:auto;object-fit:contain;user-select:none;-webkit-user-drag:none}
 .image-lightbox button{position:absolute;right:18px;top:18px;width:42px;height:42px;border:1px solid #5b4729;background:#0b0b0b;color:#fff;border-radius:50%;font-size:28px;line-height:1}
 @media(max-width:700px){body{font-size:14px}.section{padding-left:18px;padding-right:18px}.section h1{font-size:clamp(30px,9vw,48px)}.section h2{font-size:clamp(24px,7vw,36px)}.product-copy h1{font-size:clamp(30px,9vw,46px)}.variant-picker{border-radius:12px}.main-image{max-height:78vw}.image-lightbox{padding:12px}.image-lightbox img{max-width:98vw;max-height:84vh}}
+
+/* Final responsive/tracking polish */
+html,body,#root{width:100%;min-width:0;max-width:100%;overflow-x:hidden}
+body{touch-action:pan-y pinch-zoom}
+.shop{background:linear-gradient(180deg,#0b0b0b 0%,#0d0d0d 100%);border-top:1px solid rgba(214,173,88,.05)}
+.shop .section-heading{max-width:100%}
+.shop .product-grid{margin-top:10px}
+.tracking-card{margin-top:24px;border:1px solid #332b20;background:#0f0f0f;padding:18px;border-radius:14px}
+.tracking-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:1px solid #2b241c;padding-bottom:14px}.tracking-head h3{margin:6px 0 0}.tracking-head>b{color:#d6ad58}
+.tracking-line{display:grid;gap:0;margin:18px 0}.tracking-step{display:grid;grid-template-columns:34px 1fr;gap:10px;position:relative;padding:0 0 18px}.tracking-step:not(:last-child):after{content:"";position:absolute;left:15px;top:25px;bottom:0;width:1px;background:#3a3023}.tracking-dot{width:30px;height:30px;border:1px solid #4b3a23;border-radius:50%;display:grid;place-items:center;color:#777;background:#111;z-index:1}.tracking-step.current .tracking-dot{background:#d6ad58;color:#080808;border-color:#d6ad58;box-shadow:0 0 18px rgba(214,173,88,.22)}.tracking-step b{display:block}.tracking-step small{display:block;color:#898078;margin-top:3px}
+@media(max-width:700px){.section-heading h2{font-size:clamp(28px,8vw,40px)}.section-heading p{font-size:14px}.product-copy h1{font-size:clamp(26px,8vw,38px)}.tracking-card{padding:14px}.shop{min-height:70vh}.banner-slide{aspect-ratio:16/9;height:auto;min-height:0}.banner-slide picture img,.banner-slide>video{object-fit:cover}.banner-copy{left:6%;bottom:9%;max-width:84%}.banner-copy h2{font-size:clamp(22px,7vw,34px)!important}.banner-copy span{font-size:10px!important}.banner-copy button{font-size:10px;padding:9px 12px}}
