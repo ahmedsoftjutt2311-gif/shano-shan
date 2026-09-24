@@ -533,6 +533,17 @@ function renderRoute({
 /* =========================================================
    HOME
 ========================================================= */
+function bannerFont(font:string){
+  const map:any={
+    serif:'Georgia, "Times New Roman", serif',
+    classic:'"Times New Roman", Times, serif',
+    sans:'Arial, Helvetica, sans-serif',
+    display:'"Trebuchet MS", Arial, sans-serif',
+    mono:'"Courier New", Courier, monospace'
+  };
+  return map[font]||map.serif;
+}
+
 function BannerCarousel({banners}:{banners:any[]}){
   const [index,setIndex]=useState(0);
   const touchStart=React.useRef<number|null>(null);
@@ -580,11 +591,11 @@ function BannerCarousel({banners}:{banners:any[]}){
         {b.video_url&&<video autoPlay muted loop playsInline preload="metadata" poster={b.desktop_url||b.mobile_url||undefined}>
           <source src={b.video_url} type="video/mp4"/>
         </video>}
-        <div className="banner-shade"/>
-        {(b.title||b.subtitle||b.cta_text)&&<div className="banner-copy">
-          {b.subtitle&&<span>{b.subtitle}</span>}
-          {b.title&&<h2>{b.title}</h2>}
-          {b.cta_text&&<button type="button" onClick={()=>{const u=b.cta_url||"#/shop";u.startsWith("#")?location.hash=u:window.location.href=u}}>{b.cta_text}</button>}
+        <div className="banner-shade" style={{background:b.overlay_color||undefined}}/>
+        {(b.title||b.subtitle||b.cta_text)&&<div className="banner-copy" style={{left:`${Number(b.text_x??7)}%`,bottom:`${Number(b.text_y??12)}%`}}>
+          {b.subtitle&&<span style={{fontFamily:bannerFont(b.subtitle_font),color:b.text_color||undefined,fontSize:`clamp(10px,${Math.max(1.5,Number(b.subtitle_size||11)/6)}vw,${Number(b.subtitle_size||11)}px)`}}>{b.subtitle}</span>}
+          {b.title&&<h2 style={{fontFamily:bannerFont(b.title_font),color:b.text_color||undefined,fontSize:`clamp(24px,${Math.max(2.5,Number(b.title_size||48)/12)}vw,${Number(b.title_size||48)}px)`}}>{b.title}</h2>}
+          {b.cta_text&&<button type="button" style={{fontFamily:bannerFont(b.cta_font),color:b.text_color||undefined}} onClick={()=>{const u=b.cta_url||"#/shop";u.startsWith("#")?location.hash=u:window.location.href=u}}>{b.cta_text}</button>}
         </div>}
       </article>)}
     </div>
@@ -817,11 +828,12 @@ function ProductCard({
 function Product({slug}:{slug:string}) {
   const [p,setP]=useState<any>(null),[qty,setQty]=useState(1),[img,setImg]=useState(""),[selectedVariant,setSelectedVariant]=useState<any>(null),[reviews,setReviews]=useState<any[]>([]),[breakdown,setBreakdown]=useState<any[]>([]),[review,setReview]=useState(false);
   const {addToCart,user,toast}=useStore();
+  const [zoom,setZoom]=useState(false);
   useEffect(()=>{api(`/api/products/${encodeURIComponent(slug)}`).then(x=>{setP(x.product);setImg(x.product.images?.[0]?.secure_url||"");setSelectedVariant(x.product.variants?.[0]||null);api(`/api/products/${x.product.id}/reviews`).then(r=>{setReviews(r.reviews||[]);setBreakdown(r.breakdown||[])}).catch(()=>{});api(`/api/products/${x.product.id}/view`,{method:"POST"}).catch(()=>{})}).catch(()=>{})},[slug]);
   if(!p)return <section className="section loading">Loading fragrance...</section>;
   const variant=selectedVariant, stock=variant?Number(variant.stock):Number(p.stock), price=variant?.sale_price??variant?.price??p.sale_price??p.price, minQ=Math.max(1,Number(p.min_quantity||1)), maxQ=Math.min(Number(p.max_quantity||99),stock||99);
   const buyNow=async()=>{await addToCart(p,qty,variant?.id);location.hash="#/checkout"};
-  return <section className="section product-detail"><div className="gallery"><div className="main-image">{img?<img src={img} alt={p.name}/>:<span>SHANO SHAN</span>}</div><div className="thumbs">{p.images?.map((i:any)=><button key={i.id} onClick={()=>setImg(i.secure_url)} type="button"><img src={i.secure_url} alt={p.name}/></button>)}</div></div><div className="product-copy"><span className="eyebrow">{p.fragrance_family||p.gender||"SIGNATURE FRAGRANCE"}</span><h1>{p.name}</h1><div className="price">{money(price)}{variant?.sale_price&&<del>{money(variant.price)}</del>}</div>{p.rating>0&&<p>★★★★★ {Number(p.rating).toFixed(1)} · {p.review_count} ratings</p>}<p>{p.short_description||p.description}</p>{p.variants?.length>0&&<div className="variant-picker"><div className="variant-title"><span className="eyebrow">SIZE / ML</span><b>Choose your size</b></div><div className="variant-grid">{p.variants.map((v:any)=><button key={v.id} className={selectedVariant?.id===v.id?"variant-option active":"variant-option"} disabled={!v.active||v.stock<=0} onClick={()=>{setSelectedVariant(v);setQty(Math.max(minQ,1))}} type="button"><strong>{v.name}</strong><span>{money(v.sale_price??v.price)}</span>{v.stock<=0&&<small>Out of stock</small>}</button>)}</div></div>}{stock<=0?<b className="sold">Out of stock</b>:<><div className="qty"><button onClick={()=>setQty(Math.max(minQ,qty-1))} type="button">−</button><b>{qty}</b><button onClick={()=>setQty(Math.min(maxQ,qty+1))} type="button">+</button></div><small>Minimum {minQ} · Maximum {maxQ}</small><button className="wide" onClick={()=>addToCart(p,qty,variant?.id)} type="button">ADD TO CART</button><button className="wide" onClick={buyNow} type="button">BUY NOW</button></>}{p.top_notes&&<div className="notes"><div><b>Top Notes</b><span>{p.top_notes}</span></div>{p.heart_notes&&<div><b>Heart Notes</b><span>{p.heart_notes}</span></div>}{p.base_notes&&<div><b>Base Notes</b><span>{p.base_notes}</span></div>}</div>}<button className="text-btn" onClick={()=>{if(!user){toast("Please log in to leave a review");return}setReview(!review)}} type="button">Write a review</button>{review&&<Review productId={p.id}/>}<div className="reviews"><h3>Customer Reviews</h3>{reviews.length?reviews.map((r:any)=><article key={r.id}><b>{"★".repeat(r.rating)}{"☆".repeat(5-r.rating)}</b><small>{r.name}{r.verified_purchase?" · Verified Purchase":""}</small><p>{r.body}</p></article>):<p>No approved reviews yet.</p>}</div></div></section>;
+  return <section className="section product-detail"><div className="gallery"><div className="main-image" onClick={()=>img&&setZoom(true)} role={img?"button":undefined} tabIndex={img?0:undefined} onKeyDown={e=>{if(img&&(e.key==='Enter'||e.key===' '))setZoom(true)}}>{img?<img src={img} alt={p.name}/>:<span>SHANO SHAN</span>}</div><div className="thumbs">{p.images?.map((i:any)=><button key={i.id} onClick={()=>setImg(i.secure_url)} type="button"><img src={i.secure_url} alt={p.name}/></button>)}</div></div><div className="product-copy"><span className="eyebrow">{p.fragrance_family||p.gender||"SIGNATURE FRAGRANCE"}</span><h1>{p.name}</h1><div className="price">{money(price)}{variant?.sale_price&&<del>{money(variant.price)}</del>}</div>{p.rating>0&&<p>★★★★★ {Number(p.rating).toFixed(1)} · {p.review_count} ratings</p>}<p>{p.short_description||p.description}</p>{p.variants?.length>0&&<div className="variant-picker"><div className="variant-title"><span className="eyebrow">SIZE / ML</span><b>Choose your size</b></div><div className="variant-grid">{p.variants.map((v:any)=><button key={v.id} className={selectedVariant?.id===v.id?"variant-option active":"variant-option"} disabled={!v.active||v.stock<=0} onClick={()=>{setSelectedVariant(v);setQty(Math.max(minQ,1))}} type="button"><strong>{v.name}</strong><span>{money(v.sale_price??v.price)}</span>{v.stock<=0&&<small>Out of stock</small>}</button>)}</div></div>}{stock<=0?<b className="sold">Out of stock</b>:<><div className="qty"><button onClick={()=>setQty(Math.max(minQ,qty-1))} type="button">−</button><b>{qty}</b><button onClick={()=>setQty(Math.min(maxQ,qty+1))} type="button">+</button></div><small>Minimum {minQ} · Maximum {maxQ}</small><button className="wide" onClick={()=>addToCart(p,qty,variant?.id)} type="button">ADD TO CART</button><button className="wide" onClick={buyNow} type="button">BUY NOW</button></>}{p.top_notes&&<div className="notes"><div><b>Top Notes</b><span>{p.top_notes}</span></div>{p.heart_notes&&<div><b>Heart Notes</b><span>{p.heart_notes}</span></div>}{p.base_notes&&<div><b>Base Notes</b><span>{p.base_notes}</span></div>}</div>}<button className="text-btn" onClick={()=>{if(!user){toast("Please log in to leave a review");return}setReview(!review)}} type="button">Write a review</button>{review&&<Review productId={p.id}/>}<div className="reviews"><h3>Customer Reviews</h3>{reviews.length?reviews.map((r:any)=><article key={r.id}><b>{"★".repeat(r.rating)}{"☆".repeat(5-r.rating)}</b><small>{r.name}{r.verified_purchase?" · Verified Purchase":""}</small><p>{r.body}</p></article>):<p>No approved reviews yet.</p>}</div></div>{zoom&&<div className="image-lightbox" role="dialog" aria-modal="true" onClick={()=>setZoom(false)}><button type="button" aria-label="Close image" onClick={()=>setZoom(false)}>×</button><img src={img} alt={p.name} onClick={e=>e.stopPropagation()}/></div>}</section>;
 }
 
 /* =========================================================

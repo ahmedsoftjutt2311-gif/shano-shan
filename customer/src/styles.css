@@ -1731,3 +1731,12 @@ footer .footer-full-logo{width:270px!important;height:125px!important;object-fit
 @media(max-width:700px){.shop-toolbar{gap:8px;margin-bottom:24px}.shop-search{height:46px}.shop-search button{padding:0 11px}.filter-trigger{height:46px;padding:0 12px}.filter-drawer{padding:20px;width:min(360px,94vw)}.shop-search input{font-size:12px}.checkout-field-label{margin:0}}
 
 .filter-backdrop{position:fixed;inset:0;z-index:699;background:rgba(0,0,0,.58);border:0;opacity:0;pointer-events:none;transition:opacity .25s ease}.filter-backdrop.open{opacity:1;pointer-events:auto}
+
+/* FINAL MOBILE VIEWPORT + IMAGE-ONLY ZOOM */
+html,body,#root{max-width:100%;overflow-x:hidden}
+body{touch-action:pan-y}
+.main-image{cursor:zoom-in;touch-action:pan-y}
+.image-lightbox{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.96);display:flex;align-items:center;justify-content:center;padding:24px;touch-action:pan-y}
+.image-lightbox img{max-width:96vw;max-height:90vh;width:auto;height:auto;object-fit:contain;user-select:none;-webkit-user-drag:none}
+.image-lightbox button{position:absolute;right:18px;top:18px;width:42px;height:42px;border:1px solid #5b4729;background:#0b0b0b;color:#fff;border-radius:50%;font-size:28px;line-height:1}
+@media(max-width:700px){body{font-size:14px}.section{padding-left:18px;padding-right:18px}.section h1{font-size:clamp(30px,9vw,48px)}.section h2{font-size:clamp(24px,7vw,36px)}.product-copy h1{font-size:clamp(30px,9vw,46px)}.variant-picker{border-radius:12px}.main-image{max-height:78vw}.image-lightbox{padding:12px}.image-lightbox img{max-width:98vw;max-height:84vh}}
