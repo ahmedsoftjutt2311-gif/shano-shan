@@ -972,7 +972,7 @@ function Cart() {
                   <a
                     href={`#/product/${i.slug}`}
                   >
-                    <h3>{i.name}</h3>
+                    <h3>{i.name}{i.variant_name&&<small className="cart-variant"> · {i.variant_name}</small>}</h3>
                   </a>
 
                   <p>
@@ -1150,7 +1150,7 @@ function Checkout() {
       }
       const x = await api("/api/orders", {
         method: "POST",
-        body: JSON.stringify({...form,receipt_token:receiptToken}),
+        body: JSON.stringify({...form,receipt_token:receiptToken,payment_reference:ref,payment_note:note}),
       });
 
       toast(
@@ -1196,7 +1196,7 @@ function Checkout() {
 
           {["name","email","phone","address"].map((k)=>(<input key={k} placeholder={k.replace("_"," ").toUpperCase()} value={form[k]} onChange={e=>setForm({...form,[k]:e.target.value})}/>))}
           <label className="checkout-field-label">Province<select value={form.province} onChange={e=>{setForm({...form,province:e.target.value,city:""})}}><option value="">Select Province / Territory</option>{PAKISTAN_PROVINCES.map(p=><option key={p}>{p}</option>)}</select></label>
-          <label className="checkout-field-label">City / Town<select value={form.city} disabled={!form.province} onChange={e=>setForm({...form,city:e.target.value})}><option value="">{form.province?"Select City / Town":"Select province first"}</option>{(PAKISTAN_CITIES[form.province]||[]).map(city=><option value={city} key={city}>{city}</option>)}</select></label>
+          <label className="checkout-field-label">City / Town<input list="ss-pakistan-city-options" disabled={!form.province} value={form.city} placeholder={form.province?"Type city name to search…":"Select province first"} onChange={e=>setForm({...form,city:e.target.value})}/><datalist id="ss-pakistan-city-options">{(PAKISTAN_CITIES[form.province]||[]).map(city=><option value={city} key={city}/>)}</datalist><small className="field-help">Start typing to search cities and towns in the selected province.</small></label>
           <input placeholder="POSTAL CODE" value={form.postal_code} onChange={e=>setForm({...form,postal_code:e.target.value})}/>
 
           <h3>Payment</h3>
@@ -1254,7 +1254,7 @@ function OrderSummary({
             key={i.id}
           >
             <span>
-              {i.name} × {i.quantity}
+              {i.name}{i.variant_name?` · ${i.variant_name}`:""} × {i.quantity}
             </span>
 
             <b>
