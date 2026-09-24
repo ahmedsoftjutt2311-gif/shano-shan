@@ -1,0 +1,3 @@
+PRODUCTION BRAND ASSET
+
+Replace customer/public/shanoshan.png and admin/public/shanoshan.png with the exact supplied SHANO SHAN logo before deployment. The source asset was not attached/available in this build session, so no substitute artwork was generated.
