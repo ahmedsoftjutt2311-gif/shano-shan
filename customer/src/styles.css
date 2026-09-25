@@ -1751,3 +1751,62 @@ body{touch-action:pan-y pinch-zoom}
 .tracking-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:1px solid #2b241c;padding-bottom:14px}.tracking-head h3{margin:6px 0 0}.tracking-head>b{color:#d6ad58}
 .tracking-line{display:grid;gap:0;margin:18px 0}.tracking-step{display:grid;grid-template-columns:34px 1fr;gap:10px;position:relative;padding:0 0 18px}.tracking-step:not(:last-child):after{content:"";position:absolute;left:15px;top:25px;bottom:0;width:1px;background:#3a3023}.tracking-dot{width:30px;height:30px;border:1px solid #4b3a23;border-radius:50%;display:grid;place-items:center;color:#777;background:#111;z-index:1}.tracking-step.current .tracking-dot{background:#d6ad58;color:#080808;border-color:#d6ad58;box-shadow:0 0 18px rgba(214,173,88,.22)}.tracking-step b{display:block}.tracking-step small{display:block;color:#898078;margin-top:3px}
 @media(max-width:700px){.section-heading h2{font-size:clamp(28px,8vw,40px)}.section-heading p{font-size:14px}.product-copy h1{font-size:clamp(26px,8vw,38px)}.tracking-card{padding:14px}.shop{min-height:70vh}.banner-slide{aspect-ratio:16/9;height:auto;min-height:0}.banner-slide picture img,.banner-slide>video{object-fit:cover}.banner-copy{left:6%;bottom:9%;max-width:84%}.banner-copy h2{font-size:clamp(22px,7vw,34px)!important}.banner-copy span{font-size:10px!important}.banner-copy button{font-size:10px;padding:9px 12px}}
+
+/* SHANO SHAN — FINAL SHOP / LOADING POLISH
+   The filter backdrop is mounted only while the drawer is open.
+   The network loader is intentionally transparent/non-blocking so a slow API
+   request can never make the Shop page look permanently black. */
+.filter-backdrop{display:none!important}
+.filter-backdrop.open{display:block!important;opacity:1;pointer-events:auto;background:rgba(0,0,0,.52)!important}
+
+.brand-loading{
+  background:transparent!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+  pointer-events:none!important;
+}
+.loading-mark{
+  width:154px!important;
+  height:154px!important;
+  max-width:34vw;
+  max-height:34vw;
+  object-fit:contain;
+  filter:drop-shadow(0 10px 28px rgba(214,173,88,.42));
+}
+@media(max-width:700px){
+  .loading-mark{width:132px!important;height:132px!important;max-width:42vw;max-height:42vw}
+}
+
+/* Official social-brand colors. The icons remain the same SVG components. */
+.social-row button:has(svg), .contact-social:has(svg){transition:transform .18s ease, border-color .18s ease, background .18s ease, color .18s ease}
+.social-row button:has(svg), .contact-social{color:#e8e8e8}
+.social-row button:nth-child(1):has(svg), .contact-social:has(svg){ }
+.social-row button:hover, .contact-social:hover{transform:translateY(-1px)}
+.contact-social svg,.social-row button svg{color:currentColor}
+
+/* Per-network colors using the SVG's stable child order in the social lists. */
+.social-row button:nth-child(1){color:#25D366}
+.social-row button:nth-child(2){color:#E1306C}
+.social-row button:nth-child(3){color:#1877F2}
+.social-row button:nth-child(4){color:#111; background:#fff}
+.social-row button:nth-child(5){color:#FF0000}
+.contact-social-grid .contact-social:nth-child(1){color:#25D366}
+.contact-social-grid .contact-social:nth-child(2){color:#E1306C}
+.contact-social-grid .contact-social:nth-child(3){color:#1877F2}
+.contact-social-grid .contact-social:nth-child(4){color:#111;background:#f4f4f4}
+.contact-social-grid .contact-social:nth-child(5){color:#FF0000}
+.contact-social-grid .contact-social:nth-child(4):hover{background:#fff}
+
+@media(prefers-reduced-motion:reduce){.loading-mark{animation:none!important}}
+
+/* Stable social icon brand colors — independent of which links are enabled. */
+.social-row button.social-whatsapp,.contact-social.social-whatsapp{color:#25D366}
+.social-row button.social-instagram,.contact-social.social-instagram{color:#E1306C}
+.social-row button.social-facebook,.contact-social.social-facebook{color:#1877F2}
+.social-row button.social-tiktok,.contact-social.social-tiktok{color:#111;background:#fff}
+.social-row button.social-youtube,.contact-social.social-youtube{color:#FF0000}
+
+.shop-local-loading{min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#a9a096;font-size:12px;letter-spacing:.7px}
+.shop-local-loading img{width:64px;height:64px;object-fit:contain;animation:logoPulse 1.35s ease-in-out infinite;filter:drop-shadow(0 6px 18px rgba(214,173,88,.25))}
+.shop-api-error{margin:12px 0 26px;padding:18px 20px;border:1px solid #4a3923;background:#0d0d0d;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.shop-api-error b{color:#d6ad58}.shop-api-error span{color:#9f978c;flex:1;min-width:220px}.shop-api-error button{border:1px solid #6c542d;background:#d6ad58;color:#080808;padding:10px 16px;font-size:11px}

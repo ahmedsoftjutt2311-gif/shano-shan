@@ -46,30 +46,37 @@ async function api(path: string, opt: any = {}) {
     ...(opt.headers || {}),
   };
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) headers.Authorization = `Bearer ${token}`;
 
-  let r: Response;
+  // Never let a stalled network request leave the global UI in a loading state.
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
   setCustomerLoading(1);
+
   try {
-    r = await fetch(API + path, {
+    const r = await fetch(API + path, {
       ...opt,
       headers,
+      signal: opt.signal || controller.signal,
     });
-  } catch {
-    throw new Error("Unable to connect to SHANO SHAN.");
+
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      throw new Error(d.error || `Request failed (${r.status})`);
+    }
+    return d;
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      throw new Error("SHANO SHAN server took too long to respond. Please try again.");
+    }
+    if (error instanceof TypeError) {
+      throw new Error("Unable to connect to SHANO SHAN. Please check the API/CORS configuration.");
+    }
+    throw error instanceof Error ? error : new Error("Request failed");
   } finally {
+    window.clearTimeout(timeout);
     setCustomerLoading(-1);
   }
-
-  const d = await r.json().catch(() => ({}));
-
-  if (!r.ok) {
-    throw new Error(d.error || "Request failed");
-  }
-
-  return d;
 }
 
 const money = (n: any) =>
@@ -735,13 +742,28 @@ function SectionHeading({
 
 function Shop(){
  const [products,setProducts]=useState<any[]>([]),[cats,setCats]=useState<any[]>([]),[sizes,setSizes]=useState<string[]>([]),[q,setQ]=useState(""),[category,setCategory]=useState(""),[gender,setGender]=useState(""),[rating,setRating]=useState(""),[size,setSize]=useState(""),[sort,setSort]=useState("newest"),[page,setPage]=useState(1),[total,setTotal]=useState(0);
- const load=()=>{const params=new URLSearchParams({limit:"12",page:String(page),q});if(category)params.set("category",category);if(gender)params.set("gender",gender);if(rating)params.set("min_rating",rating);if(size)params.set("size",size);params.set("sort",sort);api(`/api/products?${params}`).then(x=>{setProducts(x.products||[]);setTotal(x.total||0);const all=(x.products||[]).flatMap((p:any)=>String(p.sizes||"").split(",").map((v:string)=>v.trim()).filter(Boolean));setSizes(prev=>prev.length?prev:Array.from(new Set(all)))}).catch(()=>{})};
- useEffect(()=>{api("/api/categories").then(x=>setCats(x.categories||[])).catch(()=>{});api("/api/product-sizes").then(x=>setSizes(x.sizes||[])).catch(()=>{})},[]);useEffect(()=>{load()},[page,category,gender,rating,size,sort]);
+ const [shopLoading,setShopLoading]=useState(true);
+ const [shopError,setShopError]=useState("");
+ const load=async()=>{
+   const params=new URLSearchParams({limit:"12",page:String(page),q});
+   if(category)params.set("category",category);if(gender)params.set("gender",gender);if(rating)params.set("min_rating",rating);if(size)params.set("size",size);params.set("sort",sort);
+   setShopLoading(true);setShopError("");
+   try{
+     const x=await api(`/api/products?${params}`);
+     setProducts(x.products||[]);setTotal(x.total||0);
+     const all=(x.products||[]).flatMap((p:any)=>String(p.sizes||"").split(",").map((v:string)=>v.trim()).filter(Boolean));
+     setSizes(prev=>prev.length?prev:Array.from(new Set(all)));
+   }catch(e:any){
+     setShopError(e?.message||"Unable to load fragrances right now.");
+   }finally{setShopLoading(false)}
+ };
+ useEffect(()=>{api("/api/categories").then(x=>setCats(x.categories||[])).catch(()=>{});api("/api/product-sizes").then(x=>setSizes(x.sizes||[])).catch(()=>{})},[]);
+ useEffect(()=>{load()},[page,category,gender,rating,size,sort]);
  const [filterOpen,setFilterOpen]=useState(false);
  const clearFilters=()=>{setQ("");setCategory("");setGender("");setRating("");setSize("");setSort("newest");setPage(1)};
  const filterCount=[category,gender,rating,size].filter(Boolean).length;
- const filterPanel=<><button className={`filter-backdrop ${filterOpen?"open":""}`} type="button" aria-label="Close filters" onClick={()=>setFilterOpen(false)}></button><div className={`filter-drawer ${filterOpen?"open":""}`}><div className="filter-drawer-head"><div><small>FILTERS</small><h3>Refine Fragrances</h3></div><button className="filter-close" type="button" onClick={()=>setFilterOpen(false)}><Icon name="close"/></button></div><div className="filter-fields"><label>Category<select value={category} onChange={e=>{setCategory(e.target.value);setPage(1)}}><option value="">All categories</option>{cats.map(c=><option value={c.slug} key={c.id}>{c.name}</option>)}</select></label><label>Gender<select value={gender} onChange={e=>{setGender(e.target.value);setPage(1)}}><option value="">All</option><option value="Men">Men</option><option value="Women">Women</option><option value="Unisex">Unisex</option></select></label><label>Rating<select value={rating} onChange={e=>{setRating(e.target.value);setPage(1)}}><option value="">All ratings</option><option value="4">4★ & above</option><option value="3">3★ & above</option><option value="2">2★ & above</option></select></label><label>Size / ML<select value={size} onChange={e=>{setSize(e.target.value);setPage(1)}}><option value="">All sizes</option>{sizes.map(x=><option key={x}>{x}</option>)}</select></label><label>Sort by<select value={sort} onChange={e=>{setSort(e.target.value);setPage(1)}}><option value="newest">Newest</option><option value="price_asc">Price: Low → High</option><option value="price_desc">Price: High → Low</option><option value="rating">Rating</option><option value="views">Most Viewed</option></select></label></div><div className="filter-drawer-actions"><button type="button" onClick={clearFilters}>Clear All</button><button className="primary" type="button" onClick={()=>{setPage(1);load();setFilterOpen(false)}}>Apply Filters</button></div></div></>;
- return <section className="section shop"><SectionHeading eyebrow="SHOP" title="All Fragrances" text="Find your signature scent."/><div className="shop-toolbar"><div className="shop-search"><Icon name="search" size={18}/><input placeholder="Search fragrances..." value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){setPage(1);load()}}}/><button type="button" onClick={()=>{setPage(1);load()}}>Search</button></div><button className="filter-trigger" type="button" onClick={()=>setFilterOpen(true)}><Icon name="filter" size={18}/> Filters{filterCount>0&&<b>{filterCount}</b>}</button></div>{filterPanel}<ProductGrid products={products}/><div className="pager">{page>1&&<button onClick={()=>setPage(page-1)} type="button">Previous</button>}<span>{products.length} of {total}</span>{page*12<total&&<button onClick={()=>setPage(page+1)} type="button">Next</button>}</div></section>;
+ const filterPanel=<>{filterOpen&&<button className="filter-backdrop open" type="button" aria-label="Close filters" onClick={()=>setFilterOpen(false)}></button>}<div className={`filter-drawer ${filterOpen?"open":""}`}><div className="filter-drawer-head"><div><small>FILTERS</small><h3>Refine Fragrances</h3></div><button className="filter-close" type="button" onClick={()=>setFilterOpen(false)}><Icon name="close"/></button></div><div className="filter-fields"><label>Category<select value={category} onChange={e=>{setCategory(e.target.value);setPage(1)}}><option value="">All categories</option>{cats.map(c=><option value={c.slug} key={c.id}>{c.name}</option>)}</select></label><label>Gender<select value={gender} onChange={e=>{setGender(e.target.value);setPage(1)}}><option value="">All</option><option value="Men">Men</option><option value="Women">Women</option><option value="Unisex">Unisex</option></select></label><label>Rating<select value={rating} onChange={e=>{setRating(e.target.value);setPage(1)}}><option value="">All ratings</option><option value="4">4★ & above</option><option value="3">3★ & above</option><option value="2">2★ & above</option></select></label><label>Size / ML<select value={size} onChange={e=>{setSize(e.target.value);setPage(1)}}><option value="">All sizes</option>{sizes.map(x=><option key={x}>{x}</option>)}</select></label><label>Sort by<select value={sort} onChange={e=>{setSort(e.target.value);setPage(1)}}><option value="newest">Newest</option><option value="price_asc">Price: Low → High</option><option value="price_desc">Price: High → Low</option><option value="rating">Rating</option><option value="views">Most Viewed</option></select></label></div><div className="filter-drawer-actions"><button type="button" onClick={clearFilters}>Clear All</button><button className="primary" type="button" onClick={()=>{setPage(1);load();setFilterOpen(false)}}>Apply Filters</button></div></div></>;
+ return <section className="section shop"><SectionHeading eyebrow="SHOP" title="All Fragrances" text="Find your signature scent."/><div className="shop-toolbar"><div className="shop-search"><Icon name="search" size={18}/><input placeholder="Search fragrances..." value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){setPage(1);load()}}}/><button type="button" onClick={()=>{setPage(1);load()}}>Search</button></div><button className="filter-trigger" type="button" onClick={()=>setFilterOpen(true)}><Icon name="filter" size={18}/> Filters{filterCount>0&&<b>{filterCount}</b>}</button></div>{filterPanel}{shopError&&<div className="shop-api-error" role="alert"><b>Unable to load fragrances</b><span>{shopError}</span><button type="button" onClick={load}>Try Again</button></div>}{shopLoading?<div className="shop-local-loading"><img src={logoMark} alt=""/> <span>Loading fragrances…</span></div>:<ProductGrid products={products}/>}<div className="pager">{page>1&&<button onClick={()=>setPage(page-1)} type="button">Previous</button>}<span>{products.length} of {total}</span>{page*12<total&&<button onClick={()=>setPage(page+1)} type="button">Next</button>}</div></section>;
 }
 
 /* =========================================================
@@ -1600,7 +1622,7 @@ function ContactPage({site}:{site:any}){
     {socials.length>0&&<div className="contact-socials">
       <h3>Follow & Chat With Us</h3>
       <div className="contact-social-grid">
-        {socials.map(([name,url,icon]:any)=><button className="contact-social" key={name} type="button" onClick={()=>openExternal(url)}><Icon name={icon} size={24}/><span>{name}</span></button>)}
+        {socials.map(([name,url,icon]:any)=><button className={`contact-social social-${icon}`} key={name} type="button" onClick={()=>openExternal(url)}><Icon name={icon} size={24}/><span>{name}</span></button>)}
       </div>
     </div>}
   </section>;
@@ -1786,7 +1808,7 @@ function Footer({site}:{site:any}){
       <img className="footer-full-logo" src={logo} alt="SHANO SHAN FRAGRANCE"/>
       <p>{s.footer_text||"Luxury fragrance, crafted to become part of your story."}</p>
       {links.length>0&&<div className="social-row">
-        {links.map(([name,url,icon]:any)=><button key={name} title={name} aria-label={name} onClick={()=>openExternal(url)}><Icon name={icon} size={17}/></button>)}
+        {links.map(([name,url,icon]:any)=><button className={`social-${icon}`} key={name} title={name} aria-label={name} onClick={()=>openExternal(url)}><Icon name={icon} size={17}/></button>)}
       </div>}
     </div>
     <div><h4>Explore</h4><a href="#/shop">Shop</a><a href="#/about">About</a><a href="#/contact">Contact</a><a href="#/policies">Policies</a></div>
