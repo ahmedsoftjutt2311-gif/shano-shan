@@ -12,6 +12,8 @@ const API =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8787";
 
 const logo = "/shanoshan.png";
+const GUEST_CART_KEY = "ss_guest_cart_id";
+function getGuestCartId(){let id=localStorage.getItem(GUEST_CART_KEY);if(!id){id=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;localStorage.setItem(GUEST_CART_KEY,id);}return id;}
 const logoMark = "/shanoshan-mark.png";
 const introVideo = "/videos/shano_shan_intro.mp4";
 let customerLoadingCount = 0;
@@ -49,6 +51,7 @@ async function api(path: string, opt: any = {}) {
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
+  headers['X-Cart-ID'] = localStorage.getItem(GUEST_CART_KEY) || getGuestCartId();
 
   let r: Response;
   setCustomerLoading(1);
@@ -506,6 +509,12 @@ function renderRoute({
     case "account":
       return <Account />;
 
+    case "wishlist":
+      return <Wishlist />;
+
+    case "addresses":
+      return <Addresses />;
+
     case "orders":
       return <Orders />;
 
@@ -734,14 +743,14 @@ function SectionHeading({
 ========================================================= */
 
 function Shop(){
- const [products,setProducts]=useState<any[]>([]),[cats,setCats]=useState<any[]>([]),[sizes,setSizes]=useState<string[]>([]),[q,setQ]=useState(""),[category,setCategory]=useState(""),[gender,setGender]=useState(""),[rating,setRating]=useState(""),[size,setSize]=useState(""),[sort,setSort]=useState("newest"),[page,setPage]=useState(1),[total,setTotal]=useState(0);
- const load=()=>{const params=new URLSearchParams({limit:"12",page:String(page),q});if(category)params.set("category",category);if(gender)params.set("gender",gender);if(rating)params.set("min_rating",rating);if(size)params.set("size",size);params.set("sort",sort);api(`/api/products?${params}`).then(x=>{setProducts(x.products||[]);setTotal(x.total||0);const all=(x.products||[]).flatMap((p:any)=>String(p.sizes||"").split(",").map((v:string)=>v.trim()).filter(Boolean));setSizes(prev=>prev.length?prev:Array.from(new Set(all)))}).catch(()=>{})};
+ const [products,setProducts]=useState<any[]>([]),[cats,setCats]=useState<any[]>([]),[sizes,setSizes]=useState<string[]>([]),[q,setQ]=useState(""),[category,setCategory]=useState(""),[gender,setGender]=useState(""),[rating,setRating]=useState(""),[size,setSize]=useState(""),[sort,setSort]=useState("newest"),[page,setPage]=useState(1),[total,setTotal]=useState(0),[loadError,setLoadError]=useState("");
+ const load=()=>{const params=new URLSearchParams({limit:"12",page:String(page),q});if(category)params.set("category",category);if(gender)params.set("gender",gender);if(rating)params.set("min_rating",rating);if(size)params.set("size",size);params.set("sort",sort);api(`/api/products?${params}`).then(x=>{setProducts(x.products||[]);setTotal(x.total||0);setLoadError("");const all=(x.products||[]).flatMap((p:any)=>String(p.sizes||"").split(",").map((v:string)=>v.trim()).filter(Boolean));setSizes(prev=>prev.length?prev:Array.from(new Set(all)))}).catch((e:any)=>{setProducts([]);setTotal(0);setLoadError(e.message||"Unable to load fragrances. Please try again.")})};
  useEffect(()=>{api("/api/categories").then(x=>setCats(x.categories||[])).catch(()=>{});api("/api/product-sizes").then(x=>setSizes(x.sizes||[])).catch(()=>{})},[]);useEffect(()=>{load()},[page,category,gender,rating,size,sort]);
  const [filterOpen,setFilterOpen]=useState(false);
  const clearFilters=()=>{setQ("");setCategory("");setGender("");setRating("");setSize("");setSort("newest");setPage(1)};
  const filterCount=[category,gender,rating,size].filter(Boolean).length;
  const filterPanel=<><button className={`filter-backdrop ${filterOpen?"open":""}`} type="button" aria-label="Close filters" onClick={()=>setFilterOpen(false)}></button><div className={`filter-drawer ${filterOpen?"open":""}`}><div className="filter-drawer-head"><div><small>FILTERS</small><h3>Refine Fragrances</h3></div><button className="filter-close" type="button" onClick={()=>setFilterOpen(false)}><Icon name="close"/></button></div><div className="filter-fields"><label>Category<select value={category} onChange={e=>{setCategory(e.target.value);setPage(1)}}><option value="">All categories</option>{cats.map(c=><option value={c.slug} key={c.id}>{c.name}</option>)}</select></label><label>Gender<select value={gender} onChange={e=>{setGender(e.target.value);setPage(1)}}><option value="">All</option><option value="Men">Men</option><option value="Women">Women</option><option value="Unisex">Unisex</option></select></label><label>Rating<select value={rating} onChange={e=>{setRating(e.target.value);setPage(1)}}><option value="">All ratings</option><option value="4">4★ & above</option><option value="3">3★ & above</option><option value="2">2★ & above</option></select></label><label>Size / ML<select value={size} onChange={e=>{setSize(e.target.value);setPage(1)}}><option value="">All sizes</option>{sizes.map(x=><option key={x}>{x}</option>)}</select></label><label>Sort by<select value={sort} onChange={e=>{setSort(e.target.value);setPage(1)}}><option value="newest">Newest</option><option value="price_asc">Price: Low → High</option><option value="price_desc">Price: High → Low</option><option value="rating">Rating</option><option value="views">Most Viewed</option></select></label></div><div className="filter-drawer-actions"><button type="button" onClick={clearFilters}>Clear All</button><button className="primary" type="button" onClick={()=>{setPage(1);load();setFilterOpen(false)}}>Apply Filters</button></div></div></>;
- return <section className="section shop"><SectionHeading eyebrow="SHOP" title="All Fragrances" text="Find your signature scent."/><div className="shop-toolbar"><div className="shop-search"><Icon name="search" size={18}/><input placeholder="Search fragrances..." value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){setPage(1);load()}}}/><button type="button" onClick={()=>{setPage(1);load()}}>Search</button></div><button className="filter-trigger" type="button" onClick={()=>setFilterOpen(true)}><Icon name="filter" size={18}/> Filters{filterCount>0&&<b>{filterCount}</b>}</button></div>{filterPanel}<ProductGrid products={products}/><div className="pager">{page>1&&<button onClick={()=>setPage(page-1)} type="button">Previous</button>}<span>{products.length} of {total}</span>{page*12<total&&<button onClick={()=>setPage(page+1)} type="button">Next</button>}</div></section>;
+ return <section className="section shop"><SectionHeading eyebrow="SHOP" title="All Fragrances" text="Find your signature scent."/><div className="shop-toolbar"><div className="shop-search"><Icon name="search" size={18}/><input placeholder="Search fragrances..." value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){setPage(1);load()}}}/><button type="button" onClick={()=>{setPage(1);load()}}>Search</button></div><button className="filter-trigger" type="button" onClick={()=>setFilterOpen(true)}><Icon name="filter" size={18}/> Filters{filterCount>0&&<b>{filterCount}</b>}</button></div>{filterPanel}{loadError?<div className="empty-state"><p>{loadError}</p><button className="primary" type="button" onClick={load}>Try Again</button></div>:products.length?<ProductGrid products={products}/>:<div className="empty-state"><p>No fragrances match your current filters.</p><button type="button" onClick={clearFilters}>Clear Filters</button></div>}<div className="pager">{page>1&&<button onClick={()=>setPage(page-1)} type="button">Previous</button>}<span>{products.length} of {total}</span>{page*12<total&&<button onClick={()=>setPage(page+1)} type="button">Next</button>}</div></section>;
 }
 
 /* =========================================================
@@ -770,7 +779,8 @@ function ProductCard({
 }: {
   p: any;
 }) {
-  const { addToCart } = useStore();
+  const { addToCart, toast } = useStore();
+  const [imageBroken,setImageBroken]=useState(false);
 
   return (
     <article className="product-card">
@@ -780,11 +790,8 @@ function ProductCard({
         )}`}
       >
         <div className="product-image">
-          {p.image_url ? (
-            <img
-              src={p.image_url}
-              alt={p.name}
-            />
+          {p.image_url && !imageBroken ? (
+            <img src={p.image_url} alt={p.name} loading="lazy" onError={()=>setImageBroken(true)} />
           ) : (
             <span>SHANO SHAN</span>
           )}
@@ -811,12 +818,10 @@ function ProductCard({
         </div>
       </a>
 
-      <button
-        onClick={() => addToCart(p)}
-        type="button"
-      >
-        Add to Bag
-      </button>
+      <div className="card-actions">
+        <button onClick={() => addToCart(p)} type="button">Add to Bag</button>
+        <button type="button" onClick={async()=>{try{await api(`/api/wishlist/${p.id}`,{method:'POST'});toast("Saved to wishlist")}catch(e:any){toast(e.message)}}}>♡</button>
+      </div>
     </article>
   );
 }
@@ -1116,8 +1121,11 @@ function Checkout() {
 
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [quote, setQuote] = useState<any>(null);
+  const [addresses,setAddresses]=useState<any[]>([]);
+  const [couponCode,setCouponCode]=useState("");
+  const [coupon,setCoupon]=useState<any>(null);
 
-  useEffect(()=>{api("/api/payment-methods").then(x=>setPaymentMethods(x.payment_methods||[])).catch(()=>{});api("/api/checkout/quote",{method:"POST",body:JSON.stringify({payment_method:form.payment_method})}).then(setQuote).catch(()=>{})},[cart.items?.map((i:any)=>`${i.id}:${i.quantity}`).join(","),form.payment_method]);
+  useEffect(()=>{api("/api/payment-methods").then(x=>setPaymentMethods(x.payment_methods||[])).catch(()=>{});api("/api/checkout/quote",{method:"POST",body:JSON.stringify({payment_method:form.payment_method,coupon_code:coupon?.code||""})}).then(setQuote).catch(()=>{}); if(user)api('/api/addresses').then(x=>setAddresses(x.addresses||[])).catch(()=>{})},[cart.items?.map((i:any)=>`${i.id}:${i.quantity}`).join(","),form.payment_method,coupon?.code,user]);
 
   useEffect(() => {
     if (user) {
@@ -1199,6 +1207,8 @@ function Checkout() {
           <label className="checkout-field-label">City / Town<input list="ss-pakistan-city-options" disabled={!form.province} value={form.city} placeholder={form.province?"Type city name to search…":"Select province first"} onChange={e=>setForm({...form,city:e.target.value})}/><datalist id="ss-pakistan-city-options">{(PAKISTAN_CITIES[form.province]||[]).map(city=><option value={city} key={city}/>)}</datalist><small className="field-help">Start typing to search cities and towns in the selected province.</small></label>
           <input placeholder="POSTAL CODE" value={form.postal_code} onChange={e=>setForm({...form,postal_code:e.target.value})}/>
 
+          {addresses.length>0&&<label className="checkout-field-label">Use saved address<select value="" onChange={e=>{const a=addresses.find((x:any)=>String(x.id)===e.target.value);if(a)setForm({...form,name:a.name,phone:a.phone,address:a.address,city:a.city,postal_code:a.postal_code||""})}}><option value="">Select a saved address…</option>{addresses.map(a=><option key={a.id} value={a.id}>{a.label||'Address'} — {a.city}</option>)}</select></label>}
+          <div className="coupon-box"><b>Discount code</b><div className="inline-form"><input placeholder="Enter coupon code" value={couponCode} onChange={e=>setCouponCode(e.target.value.toUpperCase())}/><button type="button" onClick={async()=>{try{const x=await api(`/api/coupons/${encodeURIComponent(couponCode)}`);setCoupon(x.coupon);toast(`Coupon ${x.coupon.code} applied`)}catch(e:any){setCoupon(null);toast(e.message)}}}>Apply</button></div>{coupon&&<small>Applied: {coupon.code} · {coupon.type==='percentage'?`${coupon.value}% off`:`${money(coupon.value)} off`}</small>}</div>
           <h3>Payment</h3>
           {paymentMethods.map((m:any)=>{const value=m.method_type==='cod'?'cod':`pm_${m.id}`;return <label className="radio" key={m.id}><input type="radio" checked={form.payment_method===value} onChange={()=>setForm({...form,payment_method:value})}/>{m.name}</label>})}
           {paymentMethods.length===0&&<label className="radio"><input type="radio" checked={form.payment_method==="cod"} onChange={()=>setForm({...form,payment_method:"cod"})}/>Cash on Delivery</label>}
@@ -1217,7 +1227,7 @@ function Checkout() {
           </button>
         </div>
 
-        <OrderSummary cart={cart} />
+        <OrderSummary cart={cart} quote={quote} />
       </div>
     </section>
   );
@@ -1228,9 +1238,9 @@ function Checkout() {
 ========================================================= */
 
 function OrderSummary({
-  cart,
+  cart, quote,
 }: {
-  cart: any;
+  cart: any; quote?: any;
 }) {
   const subtotal = (
     cart.items || []
@@ -1275,10 +1285,10 @@ function OrderSummary({
         <b>{money(subtotal)}</b>
       </div>
 
-      <p>
-        Delivery fee is calculated by
-        the store.
-      </p>
+      {quote?.discount>0&&<div className="sum-line"><span>Discount</span><b>-{money(quote.discount)}</b></div>}
+      {quote?.delivery_fee!=null&&<div className="sum-line"><span>Delivery</span><b>{money(quote.delivery_fee)}</b></div>}
+      {quote?.total!=null&&<><hr/><div className="sum-line"><span>Total</span><b>{money(quote.total)}</b></div></>}
+      {!quote&&<p>Delivery fee is calculated by the store.</p>}
     </div>
   );
 }
@@ -1308,34 +1318,12 @@ function Account() {
   if (user) {
     return (
       <section className="section account">
-        <SectionHeading
-          eyebrow="ACCOUNT"
-          title={`Welcome, ${user.name}`}
-        />
-
+        <SectionHeading eyebrow="ACCOUNT" title={`Welcome, ${user.name}`} text="Manage your orders, saved addresses and fragrance wishlist."/>
         <div className="account-cards">
-          <button
-            onClick={() =>
-              (location.hash =
-                "#/orders")
-            }
-            type="button"
-          >
-            My Orders
-          </button>
-
-          <button
-            onClick={() => {
-              localStorage.removeItem(
-                "ss_customer_token"
-              );
-
-              setUser(null);
-            }}
-            type="button"
-          >
-            Sign Out
-          </button>
+          <button onClick={()=>location.hash="#/orders"} type="button"><b>My Orders</b><small>Track purchases and payments</small></button>
+          <button onClick={()=>location.hash="#/wishlist"} type="button"><b>Wishlist</b><small>Save fragrances for later</small></button>
+          <button onClick={()=>location.hash="#/addresses"} type="button"><b>Saved Addresses</b><small>Speed up checkout</small></button>
+          <button onClick={async()=>{try{await api("/api/auth/logout",{method:"POST"})}catch{} localStorage.removeItem("ss_customer_token");setUser(null)}} type="button"><b>Sign Out</b><small>Securely end your session</small></button>
         </div>
       </section>
     );
@@ -1453,6 +1441,21 @@ function Account() {
       </div>
     </section>
   );
+}
+
+/* =========================================================
+   CUSTOMER SAVED FEATURES
+========================================================= */
+function Wishlist(){
+  const {addToCart,toast}=useStore(); const [items,setItems]=useState<any[]>([]); const [loading,setLoading]=useState(true);
+  const load=()=>{setLoading(true);api('/api/wishlist').then(x=>setItems(x.items||[])).catch(e=>toast(e.message)).finally(()=>setLoading(false))}; useEffect(load,[]);
+  return <section className="section"><SectionHeading eyebrow="WISHLIST" title="Saved Fragrances" text="Keep the scents you love close."/>{loading?<div className="loading">Loading wishlist…</div>:items.length?<div className="product-grid">{items.map(p=><article className="product-card" key={p.product_id}><a href={`#/product/${encodeURIComponent(p.slug)}`}><div className="product-image">{p.image_url?<img src={p.image_url} alt={p.name} onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none'}}/>:<span>SHANO SHAN</span>}</div><div className="product-info"><small>WISHLIST</small><h3>{p.name}</h3><strong>{money(p.sale_price??p.price)}</strong></div></a><div className="card-actions"><button onClick={()=>addToCart(p)} type="button">Add to Bag</button><button onClick={async()=>{try{await api(`/api/wishlist/${p.product_id}`,{method:'DELETE'});load()}catch(e:any){toast(e.message)}}} type="button">Remove</button></div></article>)}</div>:<div className="empty-state"><p>Your wishlist is empty.</p><button className="primary" onClick={()=>location.hash='#/shop'}>Explore Fragrances</button></div>}</section>
+}
+function Addresses(){
+ const {toast}=useStore(); const empty={label:'Home',name:'',phone:'',address:'',city:'',postal_code:'',is_default:true}; const [rows,setRows]=useState<any[]>([]),[f,setF]=useState<any>(empty),[editing,setEditing]=useState<number|null>(null),[open,setOpen]=useState(false);
+ const load=()=>api('/api/addresses').then(x=>setRows(x.addresses||[])).catch(e=>toast(e.message)); useEffect(()=>{load()},[]);
+ const save=async()=>{try{const method=editing?'PUT':'POST',url=editing?`/api/addresses/${editing}`:'/api/addresses';await api(url,{method,body:JSON.stringify(f)});toast(editing?'Address updated':'Address saved');setOpen(false);setEditing(null);setF(empty);load()}catch(e:any){toast(e.message)}};
+ return <section className="section"><SectionHeading eyebrow="ADDRESSES" title="Saved Addresses" text="Save your delivery details for faster checkout."/><div className="address-toolbar"><button className="primary" onClick={()=>{setF(empty);setEditing(null);setOpen(true)}}>+ Add Address</button></div>{open&&<div className="panel address-form"><h3>{editing?'Edit Address':'Add Address'}</h3><div className="form-grid"><label>Label<input value={f.label||''} onChange={e=>setF({...f,label:e.target.value})}/></label><label>Name<input value={f.name||''} onChange={e=>setF({...f,name:e.target.value})}/></label><label>Phone<input value={f.phone||''} onChange={e=>setF({...f,phone:e.target.value})}/></label><label>City<input value={f.city||''} onChange={e=>setF({...f,city:e.target.value})}/></label><label>Postal Code<input value={f.postal_code||''} onChange={e=>setF({...f,postal_code:e.target.value})}/></label><label className="full">Address<textarea value={f.address||''} onChange={e=>setF({...f,address:e.target.value})}/></label></div><label className="check-label"><input type="checkbox" checked={!!f.is_default} onChange={e=>setF({...f,is_default:e.target.checked})}/> Make default</label><div className="modal-actions"><button className="primary" onClick={save}>Save Address</button><button className="secondary" onClick={()=>setOpen(false)}>Cancel</button></div></div>}<div className="address-list">{rows.map(a=><article className="panel address-card" key={a.id}><div><b>{a.label||'Address'} {a.is_default&&<span className="status-pill">Default</span>}</b><p>{a.name} · {a.phone}</p><p>{a.address}, {a.city} {a.postal_code||''}</p></div><div className="card-actions"><button onClick={()=>{setF({...a,is_default:!!a.is_default});setEditing(a.id);setOpen(true)}}>Edit</button><button className="danger" onClick={async()=>{if(!confirm('Delete this saved address?'))return;try{await api(`/api/addresses/${a.id}`,{method:'DELETE'});load()}catch(e:any){toast(e.message)}}}>Delete</button></div></article>)}</div></section>
 }
 
 /* =========================================================

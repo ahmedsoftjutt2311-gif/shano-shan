@@ -9,7 +9,7 @@ database_id = "f4a72919-838f-4442-b6d1-3c2568d9fd0e"
 migrations_dir = "migrations"
 
 [vars]
-ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:5174,https://www.shanoshan.com,https://admin.shanoshan.com"
+ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:5174,https://shanoshanfragrance.vercel.app,https://shanoshanfragranceseller.vercel.app,https://www.shanoshan.com,https://admin.shanoshan.com"
 
 
 [ai]
