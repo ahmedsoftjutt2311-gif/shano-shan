@@ -14,10 +14,7 @@ const API =
 const logo = "/shanoshan.png";
 const GUEST_CART_KEY = "ss_guest_cart_id";
 function getGuestCartId(){let id=localStorage.getItem(GUEST_CART_KEY);if(!id){id=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;localStorage.setItem(GUEST_CART_KEY,id);}return id;}
-const logoMark = "/shanoshan-mark.png";
 const introVideo = "/videos/shano_shan_intro.mp4";
-let customerLoadingCount = 0;
-function setCustomerLoading(delta:number){ customerLoadingCount=Math.max(0,customerLoadingCount+delta); window.dispatchEvent(new CustomEvent("ss-loading",{detail:customerLoadingCount})); }
 
 type Product = any;
 
@@ -54,7 +51,7 @@ async function api(path: string, opt: any = {}) {
   headers['X-Cart-ID'] = localStorage.getItem(GUEST_CART_KEY) || getGuestCartId();
 
   let r: Response;
-  setCustomerLoading(1);
+
   try {
     r = await fetch(API + path, {
       ...opt,
@@ -62,8 +59,6 @@ async function api(path: string, opt: any = {}) {
     });
   } catch {
     throw new Error("Unable to connect to SHANO SHAN.");
-  } finally {
-    setCustomerLoading(-1);
   }
 
   const d = await r.json().catch(() => ({}));
@@ -93,13 +88,6 @@ function App() {
   const [user, setUser] = useState<any>(null);
   const [cart, setCart] = useState<any>({ items: [] });
   const [toast, setToast] = useState("");
-  const [globalLoading, setGlobalLoading] = useState(false);
-
-  useEffect(()=>{
-    const onLoading=(e:any)=>setGlobalLoading(Number(e.detail||0)>0);
-    window.addEventListener("ss-loading",onLoading as EventListener);
-    return ()=>window.removeEventListener("ss-loading",onLoading as EventListener);
-  },[]);
 
   /*
    * IMPORTANT:
@@ -275,17 +263,10 @@ function App() {
 
       <Footer site={site} />
       <ShanoAIWidget />
-      {globalLoading && <BrandLoadingOverlay />}
 
       {toast && <div className="toast">{toast}</div>}
     </Ctx.Provider>
   );
-}
-
-function BrandLoadingOverlay(){
-  return <div className="brand-loading" role="status" aria-live="polite">
-    <img className="loading-mark" src={logoMark} alt="SHANO SHAN"/>
-  </div>;
 }
 
 /* =========================================================
