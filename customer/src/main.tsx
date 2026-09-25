@@ -30,7 +30,6 @@ type CtxType = {
   user: any;
   setUser: any;
   toast: (s: string) => void;
-  site: any;
 };
 
 const Ctx = createContext<CtxType>({} as CtxType);
@@ -84,21 +83,6 @@ const slugify = (s: string) =>
     .replace(/(^-|-$)/g, "");
 
 /* =========================================================
-   APP SAFETY BOUNDARY
-========================================================= */
-class AppErrorBoundary extends React.Component<{children: React.ReactNode},{hasError:boolean;message:string}>{
-  state={hasError:false,message:""};
-  static getDerivedStateFromError(error:any){return {hasError:true,message:String(error?.message||"Unexpected website error")};}
-  componentDidCatch(error:any){console.error("SHANO SHAN UI error",error);}
-  render(){
-    if(this.state.hasError){
-      return <div className="app-error-screen"><div className="app-error-card"><img src={logoMark} alt="SHANO SHAN"/><span className="eyebrow">SHANO SHAN FRAGRANCE</span><h1>We’re refreshing this page.</h1><p>The store is still available. Please try again.</p><button type="button" onClick={()=>window.location.reload()}>Refresh Store</button><small>{this.state.message}</small></div></div>;
-    }
-    return this.props.children;
-  }
-}
-
-/* =========================================================
    APP
 ========================================================= */
 
@@ -107,9 +91,6 @@ function App() {
   const [cart, setCart] = useState<any>({ items: [] });
   const [toast, setToast] = useState("");
   const [globalLoading, setGlobalLoading] = useState(false);
-
-  // Safety fallback: a failed/stalled request must never leave a full-screen layer stuck.
-  useEffect(()=>{ if(!globalLoading) return; const t=window.setTimeout(()=>setGlobalLoading(false),12000); return()=>window.clearTimeout(t); },[globalLoading]);
 
   useEffect(()=>{
     const onLoading=(e:any)=>setGlobalLoading(Number(e.detail||0)>0);
@@ -257,13 +238,7 @@ function App() {
     user,
     setUser,
     toast: (s: string) => setToast(s),
-    site,
   };
-
-  const disabled = site.settings?.site_enabled === "0" || site.settings?.maintenance_mode === "1";
-  if(disabled){
-    return <div className="app-error-screen"><div className="app-error-card"><img src={logoMark} alt="SHANO SHAN"/><span className="eyebrow">SHANO SHAN FRAGRANCE</span><h1>We’ll be back shortly.</h1><p>The store is temporarily unavailable while we update the experience.</p></div></div>;
-  }
 
   return (
     <Ctx.Provider value={value}>
@@ -281,7 +256,7 @@ function App() {
         />
       )}
 
-      {site.settings?.show_topbar !== "0" && site.announcements?.length > 0 && (
+      {site.announcements?.length > 0 && (
         <Announcement items={site.announcements} />
       )}
 
@@ -296,7 +271,7 @@ function App() {
       </main>
 
       <Footer site={site} />
-      {site.settings?.show_ai !== "0" && <ShanoAIWidget />}
+      <ShanoAIWidget />
       {globalLoading && <BrandLoadingOverlay />}
 
       {toast && <div className="toast">{toast}</div>}
@@ -384,7 +359,6 @@ function Icon({name,size=20}:{name:string;size?:number}){
     user:<><circle cx="12" cy="8" r="3.2"/><path d="M5 20c.9-3.3 3.2-5 7-5s6.1 1.7 7 5"/></>,
     cart:<><path d="M3 4h2l2.1 10.2a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 1.9-1.5L20 8H6"/><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></>,
     close:<><path d="M6 6l12 12M18 6 6 18"/></>,
-    share:<><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.3 10.8 7.4-4.4M8.3 13.2l7.4 4.4"/></>,
     chevronLeft:<path d="m15 18-6-6 6-6"/>,
     chevronRight:<path d="m9 18 6-6-6-6"/>,
     robot:<><rect x="5" y="7" width="14" height="11" rx="3"/><path d="M12 4v3M9 12h.01M15 12h.01M8 18v2M16 18v2M3 11v4M21 11v4"/><path d="M9 15c1.8 1 4.2 1 6 0"/></>,
@@ -428,11 +402,8 @@ function SearchPanel({onClose}:{onClose:()=>void}){
 function usePwaInstall(){const[deferred,setDeferred]=useState<any>(null);const[installed,setInstalled]=useState(()=>{try{return window.matchMedia('(display-mode: standalone)').matches||localStorage.getItem('ss_pwa_installed')==='1'}catch{return false}});useEffect(()=>{const before=(e:any)=>{e.preventDefault();setDeferred(e)};const done=()=>{setInstalled(true);setDeferred(null);try{localStorage.setItem('ss_pwa_installed','1')}catch{}};window.addEventListener('beforeinstallprompt',before);window.addEventListener('appinstalled',done);return()=>{window.removeEventListener('beforeinstallprompt',before);window.removeEventListener('appinstalled',done)}},[]);const install=async()=>{if(!deferred)return;deferred.prompt();try{await deferred.userChoice}catch{}setDeferred(null)};return{canInstall:!!deferred&&!installed,install}}
 
 function Header({ site }: { site: any }) {
-  const [currentPath,setCurrentPath]=useState(window.location.hash||"#/");
-  useEffect(()=>{const onHash=()=>setCurrentPath(window.location.hash||"#/" );window.addEventListener("hashchange",onHash);return()=>window.removeEventListener("hashchange",onHash)},[]);
   const { cart, user, setUser } = useStore();
   const {canInstall,install}=usePwaInstall();
-  const controls=site.settings||{};
   const [open, setOpen] = useState(false);
   const [searchOpen,setSearchOpen]=useState(false);
   const [notifications,setNotifications]=useState<any[]>([]);
@@ -442,19 +413,19 @@ function Header({ site }: { site: any }) {
   const logout = async () => { try { await api("/api/auth/logout", { method: "POST" }); } catch {} localStorage.removeItem("ss_customer_token"); setUser(null); nav("#/"); };
   const count=cart.items?.reduce((n:any,i:any)=>n+Number(i.quantity),0)||0;
   useEffect(()=>{if(!user){setNotifications([]);setUnread(0);return;}api('/api/notifications').then((x:any)=>{setNotifications(x.notifications||[]);setUnread(Number(x.unread||0))}).catch(()=>{})},[user]);
-  const markRead=async(n:any)=>{try{await api(`/api/notifications/${n.id}/read`,{method:'PATCH'});setNotifications(v=>v.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x));setUnread(v=>Math.max(0,v-(n.read_at?0:1)))}catch{}};const deleteNotification=async(n:any,e:any)=>{e.stopPropagation();try{await api(`/api/notifications/${n.id}`,{method:'DELETE'});setNotifications(v=>v.filter(x=>x.id!==n.id));setUnread(v=>Math.max(0,v-(n.read_at?0:1)))}catch{}};
+  const markRead=async(n:any)=>{try{await api(`/api/notifications/${n.id}/read`,{method:'PATCH'});setNotifications(v=>v.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x));setUnread(v=>Math.max(0,v-(n.read_at?0:1)))}catch{}};
   return <>
     <header className="header">
       <div className="nav-inner">
         <button className="hamb" onClick={()=>setOpen(!open)} type="button" aria-label="Open menu">☰</button>
         <a className="brand" href="#/" aria-label="SHANO SHAN home"><img className="full-brand-logo" src={logo} alt="SHANO SHAN FRAGRANCE"/></a>
         <nav className={open?"nav open":"nav"}>
-          <a className={currentPath==="#/"?"active":""} onClick={()=>nav("#/")}>Home</a><a className={currentPath.startsWith("#/shop")?"active":""} onClick={()=>nav("#/shop")}>Shop</a><a className={currentPath.startsWith("#/scent")?"active":""} onClick={()=>nav("#/scent")}>Find Your Scent</a><a className={currentPath.startsWith("#/about")?"active":""} onClick={()=>nav("#/about")}>About</a><a className={currentPath.startsWith("#/contact")?"active":""} onClick={()=>nav("#/contact")}>Contact</a>
+          <a onClick={()=>nav("#/")}>Home</a><a onClick={()=>nav("#/shop")}>Shop</a><a onClick={()=>nav("#/scent")}>Find Your Scent</a><a onClick={()=>nav("#/about")}>About</a><a onClick={()=>nav("#/contact")}>Contact</a>
         </nav>
         <div className="nav-actions">
-          {controls.show_search !== "0" && <button className="icon-btn" onClick={()=>setSearchOpen(true)} type="button" aria-label="Search"><Icon name="search"/></button>}
-          {user&&controls.show_notifications !== "0"&&<div className="notice-wrap"><button className="icon-btn badge-wrap" onClick={()=>setNoticeOpen(v=>!v)} type="button" aria-label="Notifications"><Icon name="bell"/>{unread>0&&<b>{unread>9?'9+':unread}</b>}</button>{noticeOpen&&<div className="notice-pop"><div className="notice-head"><b>Notifications</b><button onClick={()=>setNoticeOpen(false)} type="button">×</button></div>{notifications.length?notifications.slice(0,8).map((n:any)=><div className={n.read_at?'notice-item read':'notice-item'} key={n.id}><button className="notice-content" type="button" onClick={()=>markRead(n)}><b>{n.title}</b><span>{n.body}</span><small>{new Date(n.created_at).toLocaleString()}</small></button><button className="notice-delete" type="button" aria-label="Delete notification" onClick={(e)=>deleteNotification(n,e)}><Icon name="close" size={14}/></button></div>):<p className="notice-empty">No notifications.</p>}</div>}</div>}
-          {canInstall && controls.show_install_button !== "0" && <button className="install-btn" onClick={install} type="button" aria-label="Install SHANO SHAN">Install</button>}
+          <button className="icon-btn" onClick={()=>setSearchOpen(true)} type="button" aria-label="Search"><Icon name="search"/></button>
+          {user&&<div className="notice-wrap"><button className="icon-btn badge-wrap" onClick={()=>setNoticeOpen(v=>!v)} type="button" aria-label="Notifications"><Icon name="bell"/>{unread>0&&<b>{unread>9?'9+':unread}</b>}</button>{noticeOpen&&<div className="notice-pop"><div className="notice-head"><b>Notifications</b><button onClick={()=>setNoticeOpen(false)} type="button">×</button></div>{notifications.length?notifications.slice(0,8).map((n:any)=><button className={n.read_at?'notice-item read':'notice-item'} key={n.id} onClick={()=>markRead(n)} type="button"><b>{n.title}</b><span>{n.body}</span><small>{new Date(n.created_at).toLocaleString()}</small></button>):<p className="notice-empty">No notifications.</p>}</div>}</div>}
+          {canInstall&&<button className="install-btn" onClick={install} type="button" aria-label="Install SHANO SHAN">Install</button>}
           <button className="icon-btn badge-wrap" onClick={()=>nav("#/account")} type="button" aria-label={user?"Account":"Login"}><Icon name="user"/></button>
           <button className="icon-btn badge-wrap" onClick={()=>nav("#/cart")} type="button" aria-label="Cart"><Icon name="cart"/>{count>0&&<b>{count}</b>}</button>
           {user&&<button className="desktop logout-icon" onClick={logout} type="button" aria-label="Logout">↪</button>}
@@ -507,7 +478,7 @@ function renderRoute({
 
   switch (path) {
     case "shop":
-      return <Shop site={site} />;
+      return <Shop />;
 
     case "scent":
       return <ScentQuiz />;
@@ -574,12 +545,68 @@ function bannerFont(font:string){
 }
 
 function BannerCarousel({banners}:{banners:any[]}){
- const [index,setIndex]=useState(0); const count=banners.length;
- useEffect(()=>{if(count<2)return;const t=setInterval(()=>setIndex(i=>(i+1)%count),5000);return()=>clearInterval(t)},[count]);
- useEffect(()=>{if(index>=count&&count>0)setIndex(0)},[count,index]);
- if(!count)return <section className="banner-empty"><span className="eyebrow">SHANO SHAN FRAGRANCE</span><h1>Discover your signature fragrance.</h1><button onClick={()=>location.hash="#/shop"} type="button">Explore Fragrances</button></section>;
- const go=(next:number)=>setIndex((next+count)%count);
- return <section className="banner-carousel" aria-label="Promotional banners"><div className="banner-track" style={{transform:`translate3d(-${index*100}%,0,0)`}}>{banners.map((b:any)=><article className="banner-slide" key={b.id}><picture><img src={b.desktop_url||b.mobile_url||"/shanoshan.png"} alt="SHANO SHAN promotional banner"/></picture>{b.video_url&&<video autoPlay muted loop playsInline preload="metadata" poster={b.desktop_url||b.mobile_url||undefined}><source src={b.video_url} type="video/mp4"/></video>}{b.button_text&&<button className="banner-cta" type="button" onClick={()=>{if(b.button_url)location.href=b.button_url}}>{b.button_text}</button>}</article>)}</div>{count>1&&<><button className="banner-arrow left" type="button" onClick={()=>go(index-1)} aria-label="Previous banner"><Icon name="chevronLeft"/></button><button className="banner-arrow right" type="button" onClick={()=>go(index+1)} aria-label="Next banner"><Icon name="chevronRight"/></button><div className="banner-dots">{banners.map((b:any,i:number)=><button type="button" key={b.id} className={i===index?"active":""} onClick={()=>setIndex(i)} aria-label={`Go to banner ${i+1}`}/>)}</div></>}</section>;
+  const [index,setIndex]=useState(0);
+  const touchStart=React.useRef<number|null>(null);
+  const count=banners.length;
+
+  useEffect(()=>{
+    if(count<2)return;
+    const t=setInterval(()=>setIndex(i=>(i+1)%count),5000);
+    return()=>clearInterval(t);
+  },[count]);
+
+  useEffect(()=>{
+    if(index>=count && count>0)setIndex(0);
+  },[count,index]);
+
+  if(!count){
+    return <section className="banner-empty">
+      <span className="eyebrow">SHANO SHAN FRAGRANCE</span>
+      <h1>Discover your signature fragrance.</h1>
+      <button onClick={()=>location.hash="#/shop"} type="button">Explore Fragrances</button>
+    </section>;
+  }
+
+  const go=(next:number)=>setIndex((next+count)%count);
+
+  return <section className="banner-carousel" aria-label="Promotional banners">
+    <div
+      className="banner-track"
+      style={{transform:`translate3d(-${index*100}%,0,0)`}}
+      onTouchStart={e=>{touchStart.current=e.touches[0].clientX}}
+      onTouchEnd={e=>{
+        if(touchStart.current===null)return;
+        const dx=e.changedTouches[0].clientX-touchStart.current;
+        if(Math.abs(dx)>45)go(index+(dx<0?1:-1));
+        touchStart.current=null;
+      }}
+    >
+      {banners.map((b:any)=><article className="banner-slide" key={b.id}>
+        <picture>
+          {(b.mobile_url||b.desktop_url)&&<>
+            <source media="(max-width: 700px)" srcSet={b.mobile_url||b.desktop_url}/>
+            <img src={b.desktop_url||b.mobile_url} alt={b.title||"SHANO SHAN promotional banner"}/>
+          </>}
+        </picture>
+        {b.video_url&&<video autoPlay muted loop playsInline preload="metadata" poster={b.desktop_url||b.mobile_url||undefined}>
+          <source src={b.video_url} type="video/mp4"/>
+        </video>}
+        <div className="banner-shade" style={{background:b.overlay_color||undefined}}/>
+        {(b.title||b.subtitle||b.cta_text)&&<div className="banner-copy" style={{left:`${Number(b.text_x??7)}%`,bottom:`${Number(b.text_y??12)}%`}}>
+          {b.subtitle&&<span style={{fontFamily:bannerFont(b.subtitle_font),color:b.text_color||undefined,fontSize:`clamp(10px,${Math.max(1.5,Number(b.subtitle_size||11)/6)}vw,${Number(b.subtitle_size||11)}px)`}}>{b.subtitle}</span>}
+          {b.title&&<h2 style={{fontFamily:bannerFont(b.title_font),color:b.text_color||undefined,fontSize:`clamp(24px,${Math.max(2.5,Number(b.title_size||48)/12)}vw,${Number(b.title_size||48)}px)`}}>{b.title}</h2>}
+          {b.cta_text&&<button type="button" style={{fontFamily:bannerFont(b.cta_font),color:b.text_color||undefined}} onClick={()=>{const u=b.cta_url||"#/shop";u.startsWith("#")?location.hash=u:window.location.href=u}}>{b.cta_text}</button>}
+        </div>}
+      </article>)}
+    </div>
+    {count>1&&<>
+      <button className="banner-arrow left" type="button" onClick={()=>go(index-1)} aria-label="Previous banner"><Icon name="chevronLeft"/></button>
+      <button className="banner-arrow right" type="button" onClick={()=>go(index+1)} aria-label="Next banner"><Icon name="chevronRight"/></button>
+      <div className="banner-dots">
+        {banners.map((b:any,i:number)=><button type="button" key={b.id} className={i===index?"active":""} onClick={()=>setIndex(i)} aria-label={`Go to banner ${i+1}`}/>)}
+      </div>
+    </>}
+  </section>;
 }
 
 function Home({home,site}:{home:any;site:any}){
@@ -591,7 +618,7 @@ function Home({home,site}:{home:any;site:any}){
   const founderBio=site.settings?.founder_bio||"SHANO SHAN is built around the idea that fragrance should feel personal, memorable and unmistakably yours.";
   const founderQuote=site.settings?.founder_quote||"Every fragrance has a story. This is ours.";
   return <div>
-    {home?.banners && site.settings?.show_banners !== "0" ? <BannerCarousel banners={banners}/> : null}
+    <BannerCarousel banners={banners}/>
     <section className="section"><SectionHeading eyebrow="THE COLLECTION" title="Featured Fragrances" text="Explore the scents currently available from SHANO SHAN."/><ProductGrid products={products}/><button className="outline center" onClick={()=>location.hash="#/shop"}>View All Fragrances</button></section>
     <section className="founder">
       <div className="founder-art">{founderImage?<img className="founder-image" src={founderImage} alt={founderName}/>:<div className="portrait-placeholder">SHANO<br/>SHAN</div>}</div>
@@ -706,15 +733,15 @@ function SectionHeading({
    SHOP
 ========================================================= */
 
-function Shop({site}:{site:any}){
- const [products,setProducts]=useState<any[]>([]),[cats,setCats]=useState<any[]>([]),[sizes,setSizes]=useState<string[]>([]),[q,setQ]=useState(""),[category,setCategory]=useState(""),[gender,setGender]=useState(""),[rating,setRating]=useState(""),[size,setSize]=useState(""),[sort,setSort]=useState("newest"),[page,setPage]=useState(1),[total,setTotal]=useState(0),[loading,setLoading]=useState(true),[loadError,setLoadError]=useState("");
- const load=async()=>{setLoading(true);setLoadError("");try{const params=new URLSearchParams({limit:"12",page:String(page),q});if(category)params.set("category",category);if(gender)params.set("gender",gender);if(rating)params.set("min_rating",rating);if(size)params.set("size",size);params.set("sort",sort);const x=await api(`/api/products?${params}`);setProducts(x.products||[]);setTotal(Number(x.total||0));const all=(x.products||[]).flatMap((p:any)=>String(p.sizes||"").split(",").map((v:string)=>v.trim()).filter(Boolean));if(all.length)setSizes(prev=>prev.length?prev:Array.from(new Set(all)))}catch(e:any){setProducts([]);setTotal(0);setLoadError(e?.message||"Unable to load fragrances right now.")}finally{setLoading(false)}};
+function Shop(){
+ const [products,setProducts]=useState<any[]>([]),[cats,setCats]=useState<any[]>([]),[sizes,setSizes]=useState<string[]>([]),[q,setQ]=useState(""),[category,setCategory]=useState(""),[gender,setGender]=useState(""),[rating,setRating]=useState(""),[size,setSize]=useState(""),[sort,setSort]=useState("newest"),[page,setPage]=useState(1),[total,setTotal]=useState(0);
+ const load=()=>{const params=new URLSearchParams({limit:"12",page:String(page),q});if(category)params.set("category",category);if(gender)params.set("gender",gender);if(rating)params.set("min_rating",rating);if(size)params.set("size",size);params.set("sort",sort);api(`/api/products?${params}`).then(x=>{setProducts(x.products||[]);setTotal(x.total||0);const all=(x.products||[]).flatMap((p:any)=>String(p.sizes||"").split(",").map((v:string)=>v.trim()).filter(Boolean));setSizes(prev=>prev.length?prev:Array.from(new Set(all)))}).catch(()=>{})};
  useEffect(()=>{api("/api/categories").then(x=>setCats(x.categories||[])).catch(()=>{});api("/api/product-sizes").then(x=>setSizes(x.sizes||[])).catch(()=>{})},[]);useEffect(()=>{load()},[page,category,gender,rating,size,sort]);
  const [filterOpen,setFilterOpen]=useState(false);
  const clearFilters=()=>{setQ("");setCategory("");setGender("");setRating("");setSize("");setSort("newest");setPage(1)};
  const filterCount=[category,gender,rating,size].filter(Boolean).length;
  const filterPanel=<><button className={`filter-backdrop ${filterOpen?"open":""}`} type="button" aria-label="Close filters" onClick={()=>setFilterOpen(false)}></button><div className={`filter-drawer ${filterOpen?"open":""}`}><div className="filter-drawer-head"><div><small>FILTERS</small><h3>Refine Fragrances</h3></div><button className="filter-close" type="button" onClick={()=>setFilterOpen(false)}><Icon name="close"/></button></div><div className="filter-fields"><label>Category<select value={category} onChange={e=>{setCategory(e.target.value);setPage(1)}}><option value="">All categories</option>{cats.map(c=><option value={c.slug} key={c.id}>{c.name}</option>)}</select></label><label>Gender<select value={gender} onChange={e=>{setGender(e.target.value);setPage(1)}}><option value="">All</option><option value="Men">Men</option><option value="Women">Women</option><option value="Unisex">Unisex</option></select></label><label>Rating<select value={rating} onChange={e=>{setRating(e.target.value);setPage(1)}}><option value="">All ratings</option><option value="4">4★ & above</option><option value="3">3★ & above</option><option value="2">2★ & above</option></select></label><label>Size / ML<select value={size} onChange={e=>{setSize(e.target.value);setPage(1)}}><option value="">All sizes</option>{sizes.map(x=><option key={x}>{x}</option>)}</select></label><label>Sort by<select value={sort} onChange={e=>{setSort(e.target.value);setPage(1)}}><option value="newest">Newest</option><option value="price_asc">Price: Low → High</option><option value="price_desc">Price: High → Low</option><option value="rating">Rating</option><option value="views">Most Viewed</option></select></label></div><div className="filter-drawer-actions"><button type="button" onClick={clearFilters}>Clear All</button><button className="primary" type="button" onClick={()=>{setPage(1);load();setFilterOpen(false)}}>Apply Filters</button></div></div></>;
- return <section className="section shop shop-page"><div className="shop-hero"><span className="eyebrow">THE SHANO SHAN COLLECTION</span><h1>All Fragrances</h1><p>Discover refined scents crafted for every mood, moment and signature.</p></div><div className="shop-toolbar"><div className="shop-search"><Icon name="search" size={18}/><input placeholder="Search fragrances..." value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){setPage(1);load()}}}/><button type="button" onClick={()=>{setPage(1);load()}}>Search</button></div>{site.settings?.show_filters !== "0" && <button className="filter-trigger" type="button" onClick={()=>setFilterOpen(true)}><Icon name="filter" size={18}/> Filters{filterCount>0&&<b>{filterCount}</b>}</button>}</div>{site.settings?.show_filters !== "0" && filterPanel}{loading?<div className="shop-state"><img src={logoMark} alt=""/><span>Loading fragrances…</span></div>:loadError?<div className="shop-state shop-error"><img src={logoMark} alt=""/><h3>Fragrances are taking a moment to load.</h3><p>{loadError}</p><button type="button" onClick={load}>Try Again</button></div>:products.length?<ProductGrid products={products}/>:<div className="shop-state"><img src={logoMark} alt=""/><h3>No fragrances found</h3><p>Try another search or clear your filters.</p></div>}<div className="pager">{page>1&&<button onClick={()=>setPage(page-1)} type="button">Previous</button>}<span>{products.length} of {total}</span>{page*12<total&&<button onClick={()=>setPage(page+1)} type="button">Next</button>}</div></section>;
+ return <section className="section shop"><SectionHeading eyebrow="SHOP" title="All Fragrances" text="Find your signature scent."/><div className="shop-toolbar"><div className="shop-search"><Icon name="search" size={18}/><input placeholder="Search fragrances..." value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){setPage(1);load()}}}/><button type="button" onClick={()=>{setPage(1);load()}}>Search</button></div><button className="filter-trigger" type="button" onClick={()=>setFilterOpen(true)}><Icon name="filter" size={18}/> Filters{filterCount>0&&<b>{filterCount}</b>}</button></div>{filterPanel}<ProductGrid products={products}/><div className="pager">{page>1&&<button onClick={()=>setPage(page-1)} type="button">Previous</button>}<span>{products.length} of {total}</span>{page*12<total&&<button onClick={()=>setPage(page+1)} type="button">Next</button>}</div></section>;
 }
 
 /* =========================================================
@@ -738,10 +765,60 @@ function ProductGrid({
   );
 }
 
-function ProductCard({p}:{p:any}){
- const {addToCart,toast,site}=useStore();
- const share=async(e:any)=>{e.preventDefault();e.stopPropagation();const url=`${location.origin}${location.pathname}#/product/${encodeURIComponent(p.slug)}`;try{if((navigator as any).share)await (navigator as any).share({title:p.name,text:`${p.name} — SHANO SHAN Fragrance`,url});else{await navigator.clipboard.writeText(url);toast("Product link copied");}}catch{}};
- return <article className="product-card"><a href={`#/product/${encodeURIComponent(p.slug)}`}><div className="product-image">{p.image_url?<img src={p.image_url} alt={p.name} loading="lazy" onError={(e:any)=>{e.currentTarget.style.display="none"}}/>:<span>SHANO SHAN</span>}{p.featured?<span className="product-badge">FEATURED</span>:null}</div><div className="product-info"><small>{p.category_name||p.gender||"FRAGRANCE"}</small><h3>{p.name}</h3><strong>{money(p.sale_price??p.price)}</strong>{p.sale_price&&<del>{money(p.price)}</del>}</div></a><div className="product-actions"><button className="cart-button" onClick={()=>addToCart(p)} type="button">ADD TO CART</button>{site?.settings?.show_share !== "0"&&<button className="share-button" onClick={share} type="button" aria-label={`Share ${p.name}`}><Icon name="share" size={17}/></button>}</div></article>;
+function ProductCard({
+  p,
+}: {
+  p: any;
+}) {
+  const { addToCart } = useStore();
+
+  return (
+    <article className="product-card">
+      <a
+        href={`#/product/${encodeURIComponent(
+          p.slug
+        )}`}
+      >
+        <div className="product-image">
+          {p.image_url ? (
+            <img
+              src={p.image_url}
+              alt={p.name}
+            />
+          ) : (
+            <span>SHANO SHAN</span>
+          )}
+        </div>
+
+        <div className="product-info">
+          <small>
+            {p.category_name ||
+              p.gender ||
+              "FRAGRANCE"}
+          </small>
+
+          <h3>{p.name}</h3>
+
+          <strong>
+            {money(
+              p.sale_price ?? p.price
+            )}
+          </strong>
+
+          {p.sale_price && (
+            <del>{money(p.price)}</del>
+          )}
+        </div>
+      </a>
+
+      <button
+        onClick={() => addToCart(p)}
+        type="button"
+      >
+        Add to Bag
+      </button>
+    </article>
+  );
 }
 
 /* =========================================================
@@ -756,10 +833,8 @@ function Product({slug}:{slug:string}) {
   if(!p)return <section className="section loading">Loading fragrance...</section>;
   const variant=selectedVariant, stock=variant?Number(variant.stock):Number(p.stock), price=variant?.sale_price??variant?.price??p.sale_price??p.price, minQ=Math.max(1,Number(p.min_quantity||1)), maxQ=Math.min(Number(p.max_quantity||99),stock||99);
   const buyNow=async()=>{await addToCart(p,qty,variant?.id);location.hash="#/checkout"};
-  return <section className="section product-detail"><div className="gallery"><div className="main-image" onClick={()=>img&&setZoom(true)} role={img?"button":undefined} tabIndex={img?0:undefined} onKeyDown={e=>{if(img&&(e.key==='Enter'||e.key===' '))setZoom(true)}}>{img?<img src={img} alt={p.name}/>:<span>SHANO SHAN</span>}</div><div className="thumbs">{p.images?.map((i:any)=><button key={i.id} onClick={()=>setImg(i.secure_url)} type="button"><img src={i.secure_url} alt={p.name}/></button>)}</div></div><div className="product-copy"><span className="eyebrow">{p.fragrance_family||p.gender||"SIGNATURE FRAGRANCE"}</span><h1>{p.name}</h1><div className="price">{money(price)}{variant?.sale_price&&<del>{money(variant.price)}</del>}</div>{p.rating>0&&<p>★★★★★ {Number(p.rating).toFixed(1)} · {p.review_count} ratings</p>}<ProductShare p={p}/><p>{p.short_description||p.description}</p>{p.variants?.length>0&&<div className="variant-picker"><div className="variant-title"><span className="eyebrow">SIZE / ML</span><b>Choose your size</b></div><div className="variant-grid">{p.variants.map((v:any)=><button key={v.id} className={selectedVariant?.id===v.id?"variant-option active":"variant-option"} disabled={!v.active||v.stock<=0} onClick={()=>{setSelectedVariant(v);setQty(Math.max(minQ,1))}} type="button"><strong>{v.name}</strong><span>{money(v.sale_price??v.price)}</span>{v.stock<=0&&<small>Out of stock</small>}</button>)}</div></div>}{stock<=0?<b className="sold">Out of stock</b>:<><div className="qty"><button onClick={()=>setQty(Math.max(minQ,qty-1))} type="button">−</button><b>{qty}</b><button onClick={()=>setQty(Math.min(maxQ,qty+1))} type="button">+</button></div><small>Minimum {minQ} · Maximum {maxQ}</small><button className="wide" onClick={()=>addToCart(p,qty,variant?.id)} type="button">ADD TO CART</button><button className="wide" onClick={buyNow} type="button">BUY NOW</button></>}{p.top_notes&&<div className="notes"><div><b>Top Notes</b><span>{p.top_notes}</span></div>{p.heart_notes&&<div><b>Heart Notes</b><span>{p.heart_notes}</span></div>}{p.base_notes&&<div><b>Base Notes</b><span>{p.base_notes}</span></div>}</div>}<button className="text-btn" onClick={()=>{if(!user){toast("Please log in to leave a review");return}setReview(!review)}} type="button">Write a review</button>{review&&<Review productId={p.id}/>}<div className="reviews"><h3>Customer Reviews</h3>{reviews.length?reviews.map((r:any)=><article key={r.id}><b>{"★".repeat(r.rating)}{"☆".repeat(5-r.rating)}</b><small>{r.name}{r.verified_purchase?" · Verified Purchase":""}</small><p>{r.body}</p></article>):<p>No approved reviews yet.</p>}</div></div>{zoom&&<div className="image-lightbox" role="dialog" aria-modal="true" onClick={()=>setZoom(false)}><button type="button" aria-label="Close image" onClick={()=>setZoom(false)}>×</button><img src={img} alt={p.name} onClick={e=>e.stopPropagation()}/></div>}</section>;
+  return <section className="section product-detail"><div className="gallery"><div className="main-image" onClick={()=>img&&setZoom(true)} role={img?"button":undefined} tabIndex={img?0:undefined} onKeyDown={e=>{if(img&&(e.key==='Enter'||e.key===' '))setZoom(true)}}>{img?<img src={img} alt={p.name}/>:<span>SHANO SHAN</span>}</div><div className="thumbs">{p.images?.map((i:any)=><button key={i.id} onClick={()=>setImg(i.secure_url)} type="button"><img src={i.secure_url} alt={p.name}/></button>)}</div></div><div className="product-copy"><span className="eyebrow">{p.fragrance_family||p.gender||"SIGNATURE FRAGRANCE"}</span><h1>{p.name}</h1><div className="price">{money(price)}{variant?.sale_price&&<del>{money(variant.price)}</del>}</div>{p.rating>0&&<p>★★★★★ {Number(p.rating).toFixed(1)} · {p.review_count} ratings</p>}<p>{p.short_description||p.description}</p>{p.variants?.length>0&&<div className="variant-picker"><div className="variant-title"><span className="eyebrow">SIZE / ML</span><b>Choose your size</b></div><div className="variant-grid">{p.variants.map((v:any)=><button key={v.id} className={selectedVariant?.id===v.id?"variant-option active":"variant-option"} disabled={!v.active||v.stock<=0} onClick={()=>{setSelectedVariant(v);setQty(Math.max(minQ,1))}} type="button"><strong>{v.name}</strong><span>{money(v.sale_price??v.price)}</span>{v.stock<=0&&<small>Out of stock</small>}</button>)}</div></div>}{stock<=0?<b className="sold">Out of stock</b>:<><div className="qty"><button onClick={()=>setQty(Math.max(minQ,qty-1))} type="button">−</button><b>{qty}</b><button onClick={()=>setQty(Math.min(maxQ,qty+1))} type="button">+</button></div><small>Minimum {minQ} · Maximum {maxQ}</small><button className="wide" onClick={()=>addToCart(p,qty,variant?.id)} type="button">ADD TO CART</button><button className="wide" onClick={buyNow} type="button">BUY NOW</button></>}{p.top_notes&&<div className="notes"><div><b>Top Notes</b><span>{p.top_notes}</span></div>{p.heart_notes&&<div><b>Heart Notes</b><span>{p.heart_notes}</span></div>}{p.base_notes&&<div><b>Base Notes</b><span>{p.base_notes}</span></div>}</div>}<button className="text-btn" onClick={()=>{if(!user){toast("Please log in to leave a review");return}setReview(!review)}} type="button">Write a review</button>{review&&<Review productId={p.id}/>}<div className="reviews"><h3>Customer Reviews</h3>{reviews.length?reviews.map((r:any)=><article key={r.id}><b>{"★".repeat(r.rating)}{"☆".repeat(5-r.rating)}</b><small>{r.name}{r.verified_purchase?" · Verified Purchase":""}</small><p>{r.body}</p></article>):<p>No approved reviews yet.</p>}</div></div>{zoom&&<div className="image-lightbox" role="dialog" aria-modal="true" onClick={()=>setZoom(false)}><button type="button" aria-label="Close image" onClick={()=>setZoom(false)}>×</button><img src={img} alt={p.name} onClick={e=>e.stopPropagation()}/></div>}</section>;
 }
-
-function ProductShare({p}:{p:any}){const {toast,site}=useStore();const share=async()=>{const url=`${location.origin}${location.pathname}#/product/${encodeURIComponent(p.slug)}`;try{if((navigator as any).share)await (navigator as any).share({title:p.name,text:`${p.name} — SHANO SHAN Fragrance`,url});else{await navigator.clipboard.writeText(url);toast("Product link copied");}}catch{}};return site?.settings?.show_share === "0" ? null : <div className="product-share"><span>SHARE</span><button type="button" onClick={share}><Icon name="share" size={16}/> Share Product</button></div>}
 
 /* =========================================================
    REVIEW
@@ -897,7 +972,7 @@ function Cart() {
                   <a
                     href={`#/product/${i.slug}`}
                   >
-                    <h3>{i.name}{i.variant_name&&<small className="cart-variant"> · {i.variant_name}</small>}</h3>
+                    <h3>{i.name}</h3>
                   </a>
 
                   <p>
@@ -1075,7 +1150,7 @@ function Checkout() {
       }
       const x = await api("/api/orders", {
         method: "POST",
-        body: JSON.stringify({...form,receipt_token:receiptToken,payment_reference:ref,payment_note:note}),
+        body: JSON.stringify({...form,receipt_token:receiptToken}),
       });
 
       toast(
@@ -1121,7 +1196,7 @@ function Checkout() {
 
           {["name","email","phone","address"].map((k)=>(<input key={k} placeholder={k.replace("_"," ").toUpperCase()} value={form[k]} onChange={e=>setForm({...form,[k]:e.target.value})}/>))}
           <label className="checkout-field-label">Province<select value={form.province} onChange={e=>{setForm({...form,province:e.target.value,city:""})}}><option value="">Select Province / Territory</option>{PAKISTAN_PROVINCES.map(p=><option key={p}>{p}</option>)}</select></label>
-          <label className="checkout-field-label">City / Town<select disabled={!form.province} value={form.city} onChange={e=>setForm({...form,city:e.target.value})}><option value="">{form.province?"Select city / town":"Select province first"}</option>{(PAKISTAN_CITIES[form.province]||[]).map(city=><option value={city} key={city}>{city}</option>)}</select><small className="field-help">Choose a city. On desktop/mobile you can type the first letters while the dropdown is focused to jump to matching cities.</small></label>
+          <label className="checkout-field-label">City / Town<select value={form.city} disabled={!form.province} onChange={e=>setForm({...form,city:e.target.value})}><option value="">{form.province?"Select City / Town":"Select province first"}</option>{(PAKISTAN_CITIES[form.province]||[]).map(city=><option value={city} key={city}>{city}</option>)}</select></label>
           <input placeholder="POSTAL CODE" value={form.postal_code} onChange={e=>setForm({...form,postal_code:e.target.value})}/>
 
           <h3>Payment</h3>
@@ -1179,7 +1254,7 @@ function OrderSummary({
             key={i.id}
           >
             <span>
-              {i.name}{i.variant_name?` · ${i.variant_name}`:""} × {i.quantity}
+              {i.name} × {i.quantity}
             </span>
 
             <b>
@@ -1212,7 +1287,173 @@ function OrderSummary({
    ACCOUNT
 ========================================================= */
 
-function Account(){const {user,setUser,toast}=useStore();const[login,setLogin]=useState(true),[forgot,setForgot]=useState(false),[step,setStep]=useState(0);const[f,setF]=useState<any>({email:"",password:"",name:"",phone:""});const[reset,setReset]=useState<any>({email:"",token:"",question:"",answer:"",password:""});if(user)return <section className="section account"><SectionHeading eyebrow="ACCOUNT" title={`Welcome, ${user.name}`}/><div className="account-cards"><button onClick={()=>location.hash="#/orders"} type="button">My Orders</button><button onClick={()=>{localStorage.removeItem("ss_customer_token");setUser(null)}} type="button">Sign Out</button></div></section>;const submit=async()=>{try{const x=await api(`/api/auth/${login?"login":"register"}`,{method:"POST",body:JSON.stringify(f)});localStorage.setItem("ss_customer_token",x.token);setUser(x.user);location.hash="#/"}catch(e:any){toast(e.message)}};const startReset=async()=>{try{const x=await api('/api/auth/forgot/start',{method:'POST',body:JSON.stringify({email:reset.email})});setReset({...reset,token:x.token,question:x.question});setStep(1)}catch(e:any){toast(e.message)}};const finishReset=async()=>{try{await api('/api/auth/forgot/reset',{method:'POST',body:JSON.stringify(reset)});toast('Password changed. Please sign in.');setForgot(false);setStep(0);setLogin(true);setReset({email:"",token:"",question:"",answer:"",password:""})}catch(e:any){toast(e.message)}};if(forgot)return <section className="section auth"><div className="auth-box"><span className="eyebrow">ACCOUNT RECOVERY</span><h1>Forgot Password</h1>{step===0?<><p className="auth-help">Enter your registered email to receive a maths recovery question.</p><input placeholder="Email" value={reset.email} onChange={e=>setReset({...reset,email:e.target.value})}/><button className="wide" onClick={startReset} type="button">Get Recovery Question</button></>:<><p className="auth-help">{reset.question}</p><input inputMode="numeric" placeholder="Answer" value={reset.answer} onChange={e=>setReset({...reset,answer:e.target.value})}/><input type="password" placeholder="New password (8+ characters)" value={reset.password} onChange={e=>setReset({...reset,password:e.target.value})}/><button className="wide" onClick={finishReset} type="button">Change Password</button></>}<button className="text-btn" onClick={()=>{setForgot(false);setStep(0)}} type="button">Back to Sign In</button></div></section>;return <section className="section auth"><div className="auth-box"><span className="eyebrow">SHANO SHAN</span><h1>{login?"Welcome Back":"Create Your Account"}</h1>{!login&&<><input placeholder="Name" value={f.name} onChange={e=>setF({...f,name:e.target.value})}/><input placeholder="Phone" value={f.phone} onChange={e=>setF({...f,phone:e.target.value})}/></>}<input placeholder="Email" value={f.email} onChange={e=>setF({...f,email:e.target.value})}/><input type="password" placeholder="Password (8+ characters)" value={f.password} onChange={e=>setF({...f,password:e.target.value})}/><button className="wide" onClick={submit} type="button">{login?"Sign In":"Register"}</button>{login&&<button className="text-btn" onClick={()=>setForgot(true)} type="button">Forgot Password?</button>}<button className="text-btn" onClick={()=>setLogin(!login)} type="button">{login?"Create an account":"Already have an account? Sign in"}</button></div></section>;}
+function Account() {
+  const {
+    user,
+    setUser,
+    toast,
+  } = useStore();
+
+  const [login, setLogin] =
+    useState(true);
+
+  const [f, setF] =
+    useState<any>({
+      email: "",
+      password: "",
+      name: "",
+      phone: "",
+    });
+
+  if (user) {
+    return (
+      <section className="section account">
+        <SectionHeading
+          eyebrow="ACCOUNT"
+          title={`Welcome, ${user.name}`}
+        />
+
+        <div className="account-cards">
+          <button
+            onClick={() =>
+              (location.hash =
+                "#/orders")
+            }
+            type="button"
+          >
+            My Orders
+          </button>
+
+          <button
+            onClick={() => {
+              localStorage.removeItem(
+                "ss_customer_token"
+              );
+
+              setUser(null);
+            }}
+            type="button"
+          >
+            Sign Out
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  const submit = async () => {
+    try {
+      const x = await api(
+        `/api/auth/${
+          login ? "login" : "register"
+        }`,
+        {
+          method: "POST",
+          body: JSON.stringify(f),
+        }
+      );
+
+      localStorage.setItem(
+        "ss_customer_token",
+        x.token
+      );
+
+      setUser(x.user);
+
+      location.hash = "#/";
+    } catch (e: any) {
+      toast(e.message);
+    }
+  };
+
+  return (
+    <section className="section auth">
+      <div className="auth-box">
+        <span className="eyebrow">
+          SHANO SHAN
+        </span>
+
+        <h1>
+          {login
+            ? "Welcome Back"
+            : "Create Your Account"}
+        </h1>
+
+        {!login && (
+          <>
+            <input
+              placeholder="Name"
+              value={f.name}
+              onChange={(e) =>
+                setF({
+                  ...f,
+                  name: e.target.value,
+                })
+              }
+            />
+
+            <input
+              placeholder="Phone"
+              value={f.phone}
+              onChange={(e) =>
+                setF({
+                  ...f,
+                  phone: e.target.value,
+                })
+              }
+            />
+          </>
+        )}
+
+        <input
+          placeholder="Email"
+          value={f.email}
+          onChange={(e) =>
+            setF({
+              ...f,
+              email: e.target.value,
+            })
+          }
+        />
+
+        <input
+          type="password"
+          placeholder="Password (8+ characters)"
+          value={f.password}
+          onChange={(e) =>
+            setF({
+              ...f,
+              password:
+                e.target.value,
+            })
+          }
+        />
+
+        <button
+          className="wide"
+          onClick={submit}
+          type="button"
+        >
+          {login
+            ? "Sign In"
+            : "Register"}
+        </button>
+
+        <button
+          className="text-btn"
+          onClick={() =>
+            setLogin(!login)
+          }
+          type="button"
+        >
+          {login
+            ? "Create an account"
+            : "Already have an account? Sign in"}
+        </button>
+      </div>
+    </section>
+  );
+}
 
 /* =========================================================
    ORDERS
@@ -1313,22 +1554,21 @@ function OrderDetail() {
   const [file,setFile]=useState<File|null>(null);
   const [action,setAction]=useState("");
   const [reason,setReason]=useState("");
-  const [returnFiles,setReturnFiles]=useState<File[]>([]);
   const [refund,setRefund]=useState<any>({refund_method:"Bank Transfer",refund_account_title:"",refund_account_number:"",refund_bank_name:"",refund_iban:"",refund_phone:"",refund_note:""});
-  const {toast,site}=useStore();
+  const {toast}=useStore();
   const load=()=>{if(id)return api(`/api/orders/${id}`).then(setData).catch(()=>{});if(number)return api(`/api/orders/${encodeURIComponent(number)}`).then(setData).catch(()=>{})};
   useEffect(()=>{load()},[id,number]);
   if(!data)return <section className="section loading">Loading order...</section>;
   const o=data.order;
   const blocked=['Shipped','Out for Delivery','Cancelled','Returned','Refunded'];
   const canCancel=!blocked.includes(o.status)&&!['requested','approved'].includes(o.customer_action_status);
-  const canReturn=site?.settings?.allow_returns !== '0' && o.status==='Delivered'&&o.customer_action_status==='none'&&!!o.delivered_at&&(Date.now()-new Date(o.delivered_at).getTime()<=48*60*60*1000);
-  const request=async(a:string)=>{try{if(a==='return'){if(!returnFiles.length){toast('Please upload at least one product photo for the return.');return;}const fd=new FormData();returnFiles.forEach(f=>fd.append('images',f));await api(`/api/orders/${o.id}/return-images`,{method:'POST',body:fd});}await api(`/api/orders/${o.id}/action`,{method:'POST',body:JSON.stringify({action:a,reason})});toast(`${a==='return'?'Return':'Cancellation'} request submitted.`);load()}catch(e:any){toast(e.message)}};
+  const canReturn=o.status==='Delivered'&&o.customer_action_status==='none';
+  const request=async(a:string)=>{try{await api(`/api/orders/${o.id}/action`,{method:'POST',body:JSON.stringify({action:a,reason})});toast(`${a==='return'?'Return':'Cancellation'} request submitted.`);load()}catch(e:any){toast(e.message)}};
   const saveRefund=async()=>{try{await api(`/api/orders/${o.id}/refund-details`,{method:'POST',body:JSON.stringify(refund)});toast('Refund details submitted.');load()}catch(e:any){toast(e.message)}};
   return <section className="section"><SectionHeading eyebrow="ORDER" title={o.order_number}/><div className="order-detail"><p><b>Status:</b> {o.status}</p><p><b>Payment:</b> {o.payment_status}</p><p><b>Delivery Address:</b> {o.address}, {o.city}{o.province?`, ${o.province}`:""}{o.postal_code?` ${o.postal_code}`:""}</p>{data.items.map((i:any)=><div className="sum-line" key={i.id}><span>{i.name}{i.variant_name?` · ${i.variant_name}`:""} × {i.quantity}</span><b>{money(i.line_total)}</b></div>)}<div className="sum-line"><span>Delivery</span><b>{money(o.delivery_fee)}</b></div><div className="sum-line"><span>Total</span><b>{money(o.total)}</b></div>
-    {site?.settings?.show_tracking !== "0"&&<div className="tracking-card"><div className="tracking-head"><div><span className="eyebrow">PARCEL TRACKING</span><h3>{o.courier||"SHANO SHAN DELIVERY"}</h3></div>{o.tracking_number&&<b>{o.tracking_number}</b>}</div><div className="tracking-line">{(data.tracking||[]).map((t:any,i:number)=><div className={`tracking-step ${i===(data.tracking.length-1)?"current":""}`} key={t.id}><span className="tracking-dot">{i===(data.tracking.length-1)?"◆":"✓"}</span><div><b>{t.title}</b><small>{t.description}</small><small>{new Date(t.created_at).toLocaleString()}</small></div></div>)}</div>{o.tracking_url&&<a className="outline center" href={o.tracking_url} target="_blank" rel="noreferrer">Track with Courier</a>}</div>}
+    <div className="tracking-card"><div className="tracking-head"><div><span className="eyebrow">PARCEL TRACKING</span><h3>{o.courier||"SHANO SHAN DELIVERY"}</h3></div>{o.tracking_number&&<b>{o.tracking_number}</b>}</div><div className="tracking-line">{(data.tracking||[]).map((t:any,i:number)=><div className={`tracking-step ${i===(data.tracking.length-1)?"current":""}`} key={t.id}><span className="tracking-dot">{i===(data.tracking.length-1)?"◆":"✓"}</span><div><b>{t.title}</b><small>{t.description}</small><small>{new Date(t.created_at).toLocaleString()}</small></div></div>)}</div>{o.tracking_url&&<a className="outline center" href={o.tracking_url} target="_blank" rel="noreferrer">Track with Courier</a>}</div>
     {o.customer_action_status==='requested'&&<div className="notice-box"><b>Your {o.customer_action} request is waiting for admin confirmation.</b></div>}
-    {(canCancel||canReturn)&&<div className="order-action-box"><h3>Need help with this order?</h3>{canReturn&&<div className="return-policy"><b>Return Policy — 48 Hours</b><p>Return requests are accepted only within 48 hours after delivery. Clear product photos are mandatory.</p><div className="return-photos"><label className="return-photo">{returnFiles[0]?<img src={URL.createObjectURL(returnFiles[0])} alt=""/>:<span>＋<small>Product photo *</small></span>}<input type="file" accept="image/*" multiple onChange={e=>setReturnFiles(Array.from(e.target.files||[]).slice(0,5))}/></label>{returnFiles.slice(1).map((f,i)=><div className="return-photo" key={i}><img src={URL.createObjectURL(f)} alt=""/></div>)}</div></div>}<textarea placeholder="Reason (optional)" value={reason} onChange={e=>setReason(e.target.value)}/><div className="modal-actions">{canCancel&&<button type="button" onClick={()=>request('cancel')}>Request Cancellation</button>}{canReturn&&<button className="primary" type="button" onClick={()=>request('return')}>Request Return</button>}</div></div>}
+    {(canCancel||canReturn)&&<div className="order-action-box"><h3>Need help with this order?</h3><textarea placeholder="Reason (optional)" value={reason} onChange={e=>setReason(e.target.value)}/><div className="modal-actions">{canCancel&&<button type="button" onClick={()=>request('cancel')}>Request Cancellation</button>}{canReturn&&<button className="primary" type="button" onClick={()=>request('return')}>Request Return</button>}</div></div>}
     {['awaiting_details','approved','details_requested'].includes(o.refund_status)&&<div className="refund-box"><h3>Refund Details</h3><p>Your request has been approved. Please add the account where you want to receive your refund.</p><div className="form-grid"><label>Refund Method<select value={refund.refund_method} onChange={e=>setRefund({...refund,refund_method:e.target.value})}><option>Bank Transfer</option><option>EasyPaisa</option><option>JazzCash</option><option>Other</option></select></label><label>Account Title<input value={refund.refund_account_title} onChange={e=>setRefund({...refund,refund_account_title:e.target.value})}/></label><label>Account Number<input value={refund.refund_account_number} onChange={e=>setRefund({...refund,refund_account_number:e.target.value})}/></label><label>Bank Name<input value={refund.refund_bank_name} onChange={e=>setRefund({...refund,refund_bank_name:e.target.value})}/></label><label>IBAN<input value={refund.refund_iban} onChange={e=>setRefund({...refund,refund_iban:e.target.value})}/></label><label>Phone / Wallet<input value={refund.refund_phone} onChange={e=>setRefund({...refund,refund_phone:e.target.value})}/></label></div><textarea placeholder="Refund note" value={refund.refund_note} onChange={e=>setRefund({...refund,refund_note:e.target.value})}/><button className="wide primary" type="button" onClick={saveRefund}>Submit Refund Details</button></div>}
     {o.refund_status==='details_submitted'&&<div className="notice-box"><b>Your refund details have been received. Admin is processing your refund.</b></div>}
     {o.refund_status==='refunded'&&<div className="refund-box"><h3>Refund Completed</h3><p>Your refund has been processed.</p>{o.refund_receipt_url&&<a href={o.refund_receipt_url} target="_blank" rel="noreferrer">View refund payment receipt</a>}</div>}
@@ -1546,7 +1786,7 @@ function Footer({site}:{site:any}){
       <img className="footer-full-logo" src={logo} alt="SHANO SHAN FRAGRANCE"/>
       <p>{s.footer_text||"Luxury fragrance, crafted to become part of your story."}</p>
       {links.length>0&&<div className="social-row">
-        {links.map(([name,url,icon]:any)=><button className={`social-${icon}`} key={name} title={name} aria-label={name} onClick={()=>openExternal(url)}><Icon name={icon} size={17}/></button>)}
+        {links.map(([name,url,icon]:any)=><button key={name} title={name} aria-label={name} onClick={()=>openExternal(url)}><Icon name={icon} size={17}/></button>)}
       </div>}
     </div>
     <div><h4>Explore</h4><a href="#/shop">Shop</a><a href="#/about">About</a><a href="#/contact">Contact</a><a href="#/policies">Policies</a></div>

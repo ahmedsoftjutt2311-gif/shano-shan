@@ -6,7 +6,7 @@ This build keeps the existing React/Vite customer + admin apps, Cloudflare Worke
 
 The previous `worker/migrations/0006_professional_store_updates.sql` attempted to add `orders.province` a second time even though migration `0005_shipping_locations_categories.sql` already adds it. That caused the later professional-store migration to fail, leaving the production D1 schema without tracking, receipt-rejection and banner-control fields while the Worker code was already using them. That is the main cause of the checkout/API 500 errors seen in the browser console.
 
-The duplicate `province` statement has now been removed from migration 0006. Existing data is not deleted or reset.
+The duplicate `province` statement has been removed from migration 0006. Existing data is not deleted or reset.
 
 ## Deploy
 
