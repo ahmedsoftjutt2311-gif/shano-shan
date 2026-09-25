@@ -108,6 +108,9 @@ function App() {
   const [toast, setToast] = useState("");
   const [globalLoading, setGlobalLoading] = useState(false);
 
+  // Safety fallback: a failed/stalled request must never leave a full-screen layer stuck.
+  useEffect(()=>{ if(!globalLoading) return; const t=window.setTimeout(()=>setGlobalLoading(false),12000); return()=>window.clearTimeout(t); },[globalLoading]);
+
   useEffect(()=>{
     const onLoading=(e:any)=>setGlobalLoading(Number(e.detail||0)>0);
     window.addEventListener("ss-loading",onLoading as EventListener);
@@ -122,7 +125,7 @@ function App() {
    * Therefore the intro will not replay when navigating around
    * the website.
    */
-  const [intro, setIntro] = useState(() => (window.location.hash || "#/") === "#/");
+  const [intro, setIntro] = useState(true);
 
   /*
    * Track the current hash route inside React.
@@ -152,10 +155,7 @@ function App() {
 
   useEffect(() => {
     const handleHashChange = () => {
-      const next = window.location.hash || "#/";
-      setRoute(next);
-      // Never allow the home intro overlay to cover inner pages.
-      if (next !== "#/") setIntro(false);
+      setRoute(window.location.hash || "#/");
       window.scrollTo({
         top: 0,
         behavior: "instant",
@@ -183,15 +183,6 @@ function App() {
       // Ignore cart errors while loading
     }
   };
-
-  // Safety timeout: mobile browsers can occasionally fail to fire video
-  // ended when a page is opened directly. Never leave the customer site
-  // trapped behind a black intro overlay.
-  useEffect(() => {
-    if (!intro) return;
-    const timer = window.setTimeout(() => setIntro(false), 9000);
-    return () => window.clearTimeout(timer);
-  }, [intro]);
 
   useEffect(() => {
     (async () => {
@@ -253,7 +244,7 @@ function App() {
 
       await refreshCart();
 
-      setToast("Added to cart");
+      setToast("Added to your bag");
     } catch (e: any) {
       setToast(e.message);
     }
@@ -271,7 +262,7 @@ function App() {
 
   const disabled = site.settings?.site_enabled === "0" || site.settings?.maintenance_mode === "1";
   if(disabled){
-    return <div className="app-error-screen"><div className="app-error-card"><img src={logoMark} alt="SHANO SHAN"/><span className="eyebrow">SHANO SHAN FRAGRANCE</span><h1>Website Under Maintenance</h1><p>SHANO SHAN is temporarily unavailable while we update the store. Please check again shortly.</p><span className="maintenance-badge">MAINTENANCE MODE</span></div></div>;
+    return <div className="app-error-screen"><div className="app-error-card"><img src={logoMark} alt="SHANO SHAN"/><span className="eyebrow">SHANO SHAN FRAGRANCE</span><h1>We’ll be back shortly.</h1><p>The store is temporarily unavailable while we update the experience.</p></div></div>;
   }
 
   return (
@@ -314,8 +305,8 @@ function App() {
 }
 
 function BrandLoadingOverlay(){
-  return <div className="brand-loading brand-loading-transparent" role="status" aria-live="polite">
-    <img className="loading-mark" src={logoMark} alt="" aria-hidden="true"/>
+  return <div className="brand-loading" role="status" aria-live="polite">
+    <img className="loading-mark" src={logoMark} alt="SHANO SHAN"/>
   </div>;
 }
 
@@ -366,7 +357,6 @@ function Intro({
         playsInline
         preload="auto"
         onEnded={done}
-        onError={done}
         src={introVideo}
       />
 
@@ -438,6 +428,8 @@ function SearchPanel({onClose}:{onClose:()=>void}){
 function usePwaInstall(){const[deferred,setDeferred]=useState<any>(null);const[installed,setInstalled]=useState(()=>{try{return window.matchMedia('(display-mode: standalone)').matches||localStorage.getItem('ss_pwa_installed')==='1'}catch{return false}});useEffect(()=>{const before=(e:any)=>{e.preventDefault();setDeferred(e)};const done=()=>{setInstalled(true);setDeferred(null);try{localStorage.setItem('ss_pwa_installed','1')}catch{}};window.addEventListener('beforeinstallprompt',before);window.addEventListener('appinstalled',done);return()=>{window.removeEventListener('beforeinstallprompt',before);window.removeEventListener('appinstalled',done)}},[]);const install=async()=>{if(!deferred)return;deferred.prompt();try{await deferred.userChoice}catch{}setDeferred(null)};return{canInstall:!!deferred&&!installed,install}}
 
 function Header({ site }: { site: any }) {
+  const [currentPath,setCurrentPath]=useState(window.location.hash||"#/");
+  useEffect(()=>{const onHash=()=>setCurrentPath(window.location.hash||"#/" );window.addEventListener("hashchange",onHash);return()=>window.removeEventListener("hashchange",onHash)},[]);
   const { cart, user, setUser } = useStore();
   const {canInstall,install}=usePwaInstall();
   const controls=site.settings||{};
@@ -457,14 +449,14 @@ function Header({ site }: { site: any }) {
         <button className="hamb" onClick={()=>setOpen(!open)} type="button" aria-label="Open menu">☰</button>
         <a className="brand" href="#/" aria-label="SHANO SHAN home"><img className="full-brand-logo" src={logo} alt="SHANO SHAN FRAGRANCE"/></a>
         <nav className={open?"nav open":"nav"}>
-          <a onClick={()=>nav("#/")}>Home</a><a onClick={()=>nav("#/shop")}>Shop</a><a onClick={()=>nav("#/scent")}>Find Your Scent</a><a onClick={()=>nav("#/about")}>About</a><a onClick={()=>nav("#/contact")}>Contact</a>
+          <a className={currentPath==="#/"?"active":""} onClick={()=>nav("#/")}>Home</a><a className={currentPath.startsWith("#/shop")?"active":""} onClick={()=>nav("#/shop")}>Shop</a><a className={currentPath.startsWith("#/scent")?"active":""} onClick={()=>nav("#/scent")}>Find Your Scent</a><a className={currentPath.startsWith("#/about")?"active":""} onClick={()=>nav("#/about")}>About</a><a className={currentPath.startsWith("#/contact")?"active":""} onClick={()=>nav("#/contact")}>Contact</a>
         </nav>
         <div className="nav-actions">
           {controls.show_search !== "0" && <button className="icon-btn" onClick={()=>setSearchOpen(true)} type="button" aria-label="Search"><Icon name="search"/></button>}
           {user&&controls.show_notifications !== "0"&&<div className="notice-wrap"><button className="icon-btn badge-wrap" onClick={()=>setNoticeOpen(v=>!v)} type="button" aria-label="Notifications"><Icon name="bell"/>{unread>0&&<b>{unread>9?'9+':unread}</b>}</button>{noticeOpen&&<div className="notice-pop"><div className="notice-head"><b>Notifications</b><button onClick={()=>setNoticeOpen(false)} type="button">×</button></div>{notifications.length?notifications.slice(0,8).map((n:any)=><div className={n.read_at?'notice-item read':'notice-item'} key={n.id}><button className="notice-content" type="button" onClick={()=>markRead(n)}><b>{n.title}</b><span>{n.body}</span><small>{new Date(n.created_at).toLocaleString()}</small></button><button className="notice-delete" type="button" aria-label="Delete notification" onClick={(e)=>deleteNotification(n,e)}><Icon name="close" size={14}/></button></div>):<p className="notice-empty">No notifications.</p>}</div>}</div>}
           {canInstall && controls.show_install_button !== "0" && <button className="install-btn" onClick={install} type="button" aria-label="Install SHANO SHAN">Install</button>}
-          {controls.show_account !== "0" && <button className="icon-btn badge-wrap" onClick={()=>nav("#/account")} type="button" aria-label={user?"Account":"Login"}><Icon name="user"/></button>}
-          {controls.show_cart !== "0" && <button className="icon-btn badge-wrap" onClick={()=>nav("#/cart")} type="button" aria-label="Cart"><Icon name="cart"/>{count>0&&<b>{count}</b>}</button>}
+          <button className="icon-btn badge-wrap" onClick={()=>nav("#/account")} type="button" aria-label={user?"Account":"Login"}><Icon name="user"/></button>
+          <button className="icon-btn badge-wrap" onClick={()=>nav("#/cart")} type="button" aria-label="Cart"><Icon name="cart"/>{count>0&&<b>{count}</b>}</button>
           {user&&<button className="desktop logout-icon" onClick={logout} type="button" aria-label="Logout">↪</button>}
         </div>
       </div>
@@ -749,7 +741,7 @@ function ProductGrid({
 function ProductCard({p}:{p:any}){
  const {addToCart,toast,site}=useStore();
  const share=async(e:any)=>{e.preventDefault();e.stopPropagation();const url=`${location.origin}${location.pathname}#/product/${encodeURIComponent(p.slug)}`;try{if((navigator as any).share)await (navigator as any).share({title:p.name,text:`${p.name} — SHANO SHAN Fragrance`,url});else{await navigator.clipboard.writeText(url);toast("Product link copied");}}catch{}};
- return <article className="product-card"><a href={`#/product/${encodeURIComponent(p.slug)}`}><div className="product-image">{p.image_url?<img src={p.image_url} alt={p.name} loading="lazy" onError={(e:any)=>{e.currentTarget.style.display="none"}}/>:<span>SHANO SHAN</span>}{p.featured?<span className="product-badge">FEATURED</span>:null}</div><div className="product-info"><small>{p.category_name||p.gender||"FRAGRANCE"}</small><h3>{p.name}</h3><strong>{money(p.sale_price??p.price)}</strong>{p.sale_price&&<del>{money(p.price)}</del>}</div></a><div className="product-actions">{site?.settings?.show_add_to_cart !== "0"&&<button className="cart-button" onClick={()=>addToCart(p)} type="button">ADD TO CART</button>}{site?.settings?.show_share !== "0"&&<button className="share-button" onClick={share} type="button" aria-label={`Share ${p.name}`}><Icon name="share" size={17}/></button>}</div></article>;
+ return <article className="product-card"><a href={`#/product/${encodeURIComponent(p.slug)}`}><div className="product-image">{p.image_url?<img src={p.image_url} alt={p.name} loading="lazy" onError={(e:any)=>{e.currentTarget.style.display="none"}}/>:<span>SHANO SHAN</span>}{p.featured?<span className="product-badge">FEATURED</span>:null}</div><div className="product-info"><small>{p.category_name||p.gender||"FRAGRANCE"}</small><h3>{p.name}</h3><strong>{money(p.sale_price??p.price)}</strong>{p.sale_price&&<del>{money(p.price)}</del>}</div></a><div className="product-actions"><button className="cart-button" onClick={()=>addToCart(p)} type="button">ADD TO CART</button>{site?.settings?.show_share !== "0"&&<button className="share-button" onClick={share} type="button" aria-label={`Share ${p.name}`}><Icon name="share" size={17}/></button>}</div></article>;
 }
 
 /* =========================================================
@@ -1336,11 +1328,11 @@ function OrderDetail() {
   return <section className="section"><SectionHeading eyebrow="ORDER" title={o.order_number}/><div className="order-detail"><p><b>Status:</b> {o.status}</p><p><b>Payment:</b> {o.payment_status}</p><p><b>Delivery Address:</b> {o.address}, {o.city}{o.province?`, ${o.province}`:""}{o.postal_code?` ${o.postal_code}`:""}</p>{data.items.map((i:any)=><div className="sum-line" key={i.id}><span>{i.name}{i.variant_name?` · ${i.variant_name}`:""} × {i.quantity}</span><b>{money(i.line_total)}</b></div>)}<div className="sum-line"><span>Delivery</span><b>{money(o.delivery_fee)}</b></div><div className="sum-line"><span>Total</span><b>{money(o.total)}</b></div>
     {site?.settings?.show_tracking !== "0"&&<div className="tracking-card"><div className="tracking-head"><div><span className="eyebrow">PARCEL TRACKING</span><h3>{o.courier||"SHANO SHAN DELIVERY"}</h3></div>{o.tracking_number&&<b>{o.tracking_number}</b>}</div><div className="tracking-line">{(data.tracking||[]).map((t:any,i:number)=><div className={`tracking-step ${i===(data.tracking.length-1)?"current":""}`} key={t.id}><span className="tracking-dot">{i===(data.tracking.length-1)?"◆":"✓"}</span><div><b>{t.title}</b><small>{t.description}</small><small>{new Date(t.created_at).toLocaleString()}</small></div></div>)}</div>{o.tracking_url&&<a className="outline center" href={o.tracking_url} target="_blank" rel="noreferrer">Track with Courier</a>}</div>}
     {o.customer_action_status==='requested'&&<div className="notice-box"><b>Your {o.customer_action} request is waiting for admin confirmation.</b></div>}
-    {(canCancel||canReturn)&&<div className="order-action-box"><h3>Need help with this order?</h3>{canReturn&&<div className="return-policy"><b>Return Policy — 48 Hours</b><p>Return requests are accepted only within 48 hours after delivery. At least one clear product photo is mandatory. Add your product photos below before submitting.</p><div className="return-photos"><label className="return-photo">{returnFiles[0]?<img src={URL.createObjectURL(returnFiles[0])} alt=""/>:<span>＋<small>Product photo *</small></span>}<input type="file" accept="image/*" multiple onChange={e=>setReturnFiles(Array.from(e.target.files||[]).slice(0,5))}/></label>{returnFiles.slice(1).map((f,i)=><div className="return-photo" key={i}><img src={URL.createObjectURL(f)} alt=""/></div>)}</div></div>}<textarea placeholder="Reason (optional)" value={reason} onChange={e=>setReason(e.target.value)}/><div className="modal-actions">{canCancel&&<button type="button" onClick={()=>request('cancel')}>Request Cancellation</button>}{canReturn&&<button className="primary" type="button" disabled={!returnFiles.length} onClick={()=>request('return')}>Request Return</button>}</div></div>}
+    {(canCancel||canReturn)&&<div className="order-action-box"><h3>Need help with this order?</h3>{canReturn&&<div className="return-policy"><b>Return Policy — 48 Hours</b><p>Return requests are accepted only within 48 hours after delivery. Clear product photos are mandatory.</p><div className="return-photos"><label className="return-photo">{returnFiles[0]?<img src={URL.createObjectURL(returnFiles[0])} alt=""/>:<span>＋<small>Product photo *</small></span>}<input type="file" accept="image/*" multiple onChange={e=>setReturnFiles(Array.from(e.target.files||[]).slice(0,5))}/></label>{returnFiles.slice(1).map((f,i)=><div className="return-photo" key={i}><img src={URL.createObjectURL(f)} alt=""/></div>)}</div></div>}<textarea placeholder="Reason (optional)" value={reason} onChange={e=>setReason(e.target.value)}/><div className="modal-actions">{canCancel&&<button type="button" onClick={()=>request('cancel')}>Request Cancellation</button>}{canReturn&&<button className="primary" type="button" onClick={()=>request('return')}>Request Return</button>}</div></div>}
     {['awaiting_details','approved','details_requested'].includes(o.refund_status)&&<div className="refund-box"><h3>Refund Details</h3><p>Your request has been approved. Please add the account where you want to receive your refund.</p><div className="form-grid"><label>Refund Method<select value={refund.refund_method} onChange={e=>setRefund({...refund,refund_method:e.target.value})}><option>Bank Transfer</option><option>EasyPaisa</option><option>JazzCash</option><option>Other</option></select></label><label>Account Title<input value={refund.refund_account_title} onChange={e=>setRefund({...refund,refund_account_title:e.target.value})}/></label><label>Account Number<input value={refund.refund_account_number} onChange={e=>setRefund({...refund,refund_account_number:e.target.value})}/></label><label>Bank Name<input value={refund.refund_bank_name} onChange={e=>setRefund({...refund,refund_bank_name:e.target.value})}/></label><label>IBAN<input value={refund.refund_iban} onChange={e=>setRefund({...refund,refund_iban:e.target.value})}/></label><label>Phone / Wallet<input value={refund.refund_phone} onChange={e=>setRefund({...refund,refund_phone:e.target.value})}/></label></div><textarea placeholder="Refund note" value={refund.refund_note} onChange={e=>setRefund({...refund,refund_note:e.target.value})}/><button className="wide primary" type="button" onClick={saveRefund}>Submit Refund Details</button></div>}
     {o.refund_status==='details_submitted'&&<div className="notice-box"><b>Your refund details have been received. Admin is processing your refund.</b></div>}
     {o.refund_status==='refunded'&&<div className="refund-box"><h3>Refund Completed</h3><p>Your refund has been processed.</p>{o.refund_receipt_url&&<a href={o.refund_receipt_url} target="_blank" rel="noreferrer">View refund payment receipt</a>}</div>}
-    {data.payment?.method !== 'cod' && data.payment?.status !== 'Verified' && <div className="manual-box"><h3>Payment Receipt</h3>{data.payment?.receipt_url&&<a href={data.payment.receipt_url} target="_blank" rel="noreferrer"><img className="receipt order-receipt-preview" src={data.payment.receipt_url} alt="Payment receipt"/></a>}{data.payment?.rejection_reason&&<p className="error"><b>Receipt rejected:</b> {data.payment.rejection_reason}</p>}<input type="file" accept="image/*,.pdf" onChange={e=>setFile(e.target.files?.[0]||null)}/><button onClick={async()=>{if(!file)return;const fd=new FormData();fd.append('receipt',file);try{await api(`/api/orders/${o.id}/receipt`,{method:'POST',body:fd});toast('Receipt uploaded');load()}catch(e:any){toast(e.message)}}} type="button">{data.payment?.rejection_reason?'Upload New Receipt':'Upload Receipt'}</button></div>}
+    {data.payment?.method !== 'cod' && data.payment?.status !== 'Verified' && <div className="manual-box"><h3>Payment Receipt</h3>{data.payment?.receipt_url&&<a href={data.payment.receipt_url} target="_blank" rel="noreferrer"><img className="receipt" src={data.payment.receipt_url} alt="Payment receipt"/></a>}{data.payment?.rejection_reason&&<p className="error"><b>Receipt rejected:</b> {data.payment.rejection_reason}</p>}<input type="file" accept="image/*,.pdf" onChange={e=>setFile(e.target.files?.[0]||null)}/><button onClick={async()=>{if(!file)return;const fd=new FormData();fd.append('receipt',file);try{await api(`/api/orders/${o.id}/receipt`,{method:'POST',body:fd});toast('Receipt uploaded');load()}catch(e:any){toast(e.message)}}} type="button">{data.payment?.rejection_reason?'Upload New Receipt':'Upload Receipt'}</button></div>}
   </div></section>;
 }
 
@@ -1557,8 +1549,8 @@ function Footer({site}:{site:any}){
         {links.map(([name,url,icon]:any)=><button className={`social-${icon}`} key={name} title={name} aria-label={name} onClick={()=>openExternal(url)}><Icon name={icon} size={17}/></button>)}
       </div>}
     </div>
-    <div><h4>Explore</h4>{s.show_shop !== "0"&&<a href="#/shop">Shop</a>}{s.show_about !== "0"&&<a href="#/about">About</a>}{s.show_contact !== "0"&&<a href="#/contact">Contact</a>}<a href="#/policies">Policies</a></div>
-    <div><h4>Account</h4>{s.show_account !== "0"&&<a href="#/account">Login</a>}<a href="#/orders">Orders</a>{s.show_cart !== "0"&&<a href="#/cart">Cart</a>}</div>
+    <div><h4>Explore</h4><a href="#/shop">Shop</a><a href="#/about">About</a><a href="#/contact">Contact</a><a href="#/policies">Policies</a></div>
+    <div><h4>Account</h4><a href="#/account">Login</a><a href="#/orders">Orders</a><a href="#/cart">Cart</a></div>
     <div>
       <h4>Contact</h4>
       {s.contact_phone&&<p className="footer-contact"><Icon name="phone" size={16}/><a href={`tel:${s.contact_phone}`}>{s.contact_phone}</a></p>}
