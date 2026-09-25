@@ -97,14 +97,6 @@ function App() {
   const [user, setUser] = useState<any>(null);
   const [cart, setCart] = useState<any>({ items: [] });
   const [toast, setToast] = useState("");
-  const [globalLoading, setGlobalLoading] = useState(false);
-
-  useEffect(()=>{
-    const onLoading=(e:any)=>setGlobalLoading(Number(e.detail||0)>0);
-    window.addEventListener("ss-loading",onLoading as EventListener);
-    return ()=>window.removeEventListener("ss-loading",onLoading as EventListener);
-  },[]);
-
   /*
    * IMPORTANT:
    * This is true only when the React application initially loads.
@@ -279,17 +271,9 @@ function App() {
 
       <Footer site={site} />
       <ShanoAIWidget />
-      {globalLoading && <BrandLoadingOverlay />}
-
       {toast && <div className="toast">{toast}</div>}
     </Ctx.Provider>
   );
-}
-
-function BrandLoadingOverlay(){
-  return <div className="brand-loading" role="status" aria-live="polite">
-    <img className="loading-mark" src={logoMark} alt="SHANO SHAN"/>
-  </div>;
 }
 
 /* =========================================================
