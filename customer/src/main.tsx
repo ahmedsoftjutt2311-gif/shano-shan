@@ -37,6 +37,21 @@ const Ctx = createContext<CtxType>({} as CtxType);
 
 const useStore = () => useContext(Ctx);
 
+function getGuestCartId() {
+  try {
+    let id = localStorage.getItem("ss_cart_id");
+    if (!id) {
+      id =
+        (crypto as any).randomUUID?.() ||
+        `guest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem("ss_cart_id", id as string);
+    }
+    return id;
+  } catch {
+    return "";
+  }
+}
+
 async function api(path: string, opt: any = {}) {
   const token = localStorage.getItem("ss_customer_token");
 
@@ -50,6 +65,11 @@ async function api(path: string, opt: any = {}) {
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
+  // Without this, every request created a brand-new empty server-side cart
+  // (guest cart never persisted), so items added to cart before logging in
+  // were lost on the very next request.
+  const cartId = getGuestCartId();
+  if (cartId) headers["X-Cart-ID"] = cartId;
 
   let r: Response;
   setCustomerLoading(1);
