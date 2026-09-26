@@ -137,7 +137,7 @@ function App() {
   );
 
   const [site, setSite] = useState<any>({
-    settings: {},
+    settings: {show_variant_cards:"1"},
     announcements: [],
   });
 
@@ -257,9 +257,12 @@ function App() {
     site,
   };
 
-  const disabled = site.settings?.site_enabled === "0" || site.settings?.maintenance_mode === "1";
+  const maintenance = site.settings?.maintenance_mode === "1";
+  const disabled = site.settings?.site_enabled === "0" || maintenance;
   if(disabled){
-    return <div className="app-error-screen"><div className="app-error-card"><img src={logoMark} alt="SHANO SHAN"/><span className="eyebrow">SHANO SHAN FRAGRANCE</span><h1>We’ll be back shortly.</h1><p>The store is temporarily unavailable while we update the experience.</p></div></div>;
+    const title = site.settings?.maintenance_title || "We’ll be back shortly.";
+    const message = site.settings?.maintenance_message || "The store is temporarily unavailable while we update the experience.";
+    return <div className="maintenance-screen"><div className="maintenance-card"><img src={logoMark} alt="SHANO SHAN"/><span className="eyebrow">SHANO SHAN FRAGRANCE</span><h1>{title}</h1><p>{message}</p><span className="maintenance-dot">STORE MAINTENANCE</span></div></div>;
   }
 
   return (
@@ -502,11 +505,14 @@ function renderRoute({
   const productSlug = hash.match(
     /^#\/product\/(.+)/
   )?.[1];
+  const variantMatch = hash.match(/[?&]variant=([^&]+)/);
+  const initialVariantId = variantMatch ? Number(decodeURIComponent(variantMatch[1])) : undefined;
 
   if (productSlug) {
     return (
       <Product
         slug={decodeURIComponent(productSlug)}
+        initialVariantId={initialVariantId}
       />
     );
   }
@@ -580,14 +586,21 @@ function bannerFont(font:string){
 }
 
 function BannerCarousel({banners}:{banners:any[]}){
- const [index,setIndex]=useState(0); const count=banners.length;
- useEffect(()=>{if(count<2)return;const t=setInterval(()=>setIndex(i=>(i+1)%count),5000);return()=>clearInterval(t)},[count]);
+ const [index,setIndex]=useState(0); const [paused,setPaused]=useState(false); const count=banners.length;
+ useEffect(()=>{if(count<2||paused)return;const t=setInterval(()=>setIndex(i=>(i+1)%count),5000);return()=>clearInterval(t)},[count,paused]);
  useEffect(()=>{if(index>=count&&count>0)setIndex(0)},[count,index]);
  if(!count)return <section className="banner-empty"><span className="eyebrow">SHANO SHAN FRAGRANCE</span><h1>Discover your signature fragrance.</h1><button onClick={()=>location.hash="#/shop"} type="button">Explore Fragrances</button></section>;
  const go=(next:number)=>setIndex((next+count)%count);
- return <section className="banner-carousel" aria-label="Promotional banners"><div className="banner-track" style={{transform:`translate3d(-${index*100}%,0,0)`}}>{banners.map((b:any)=><article className="banner-slide" key={b.id}><picture><img src={b.desktop_url||b.mobile_url||"/shanoshan.png"} alt="SHANO SHAN promotional banner"/></picture>{b.video_url&&<video autoPlay muted loop playsInline preload="metadata" poster={b.desktop_url||b.mobile_url||undefined}><source src={b.video_url} type="video/mp4"/></video>}{(b.title||b.subtitle||b.cta_url||b.button_url)&&<div className="banner-auto-copy">{b.title&&<h2>{b.title}</h2>}{b.subtitle&&<p>{b.subtitle}</p>}{(b.cta_url||b.button_url)&&<button className="banner-cta" type="button" onClick={()=>{location.href=b.cta_url||b.button_url}}>SHOP NOW</button>}</div>}</article>)}</div>{count>1&&<><button className="banner-arrow left" type="button" onClick={()=>go(index-1)} aria-label="Previous banner"><Icon name="chevronLeft"/></button><button className="banner-arrow right" type="button" onClick={()=>go(index+1)} aria-label="Next banner"><Icon name="chevronRight"/></button><div className="banner-dots">{banners.map((b:any,i:number)=><button type="button" key={b.id} className={i===index?"active":""} onClick={()=>setIndex(i)} aria-label={`Go to banner ${i+1}`}/>)}</div></>}</section>;
+ return <section className="banner-carousel" aria-label="Promotional banners" onMouseEnter={()=>setPaused(true)} onMouseLeave={()=>setPaused(false)} onFocusCapture={()=>setPaused(true)} onBlurCapture={()=>setPaused(false)}>
+   <div className="banner-track" style={{transform:`translate3d(-${index*100}%,0,0)`}}>{banners.map((b:any,i:number)=><article className="banner-slide" key={b.id||i}>
+     <picture><img src={b.desktop_url||b.mobile_url||"/shanoshan.png"} alt={b.title||"SHANO SHAN promotional banner"} loading={i===0?"eager":"lazy"}/></picture>
+     {b.video_url&&<video autoPlay muted loop playsInline preload="metadata" poster={b.desktop_url||b.mobile_url||undefined}><source src={b.video_url} type="video/mp4"/></video>}
+     <div className="banner-shade"/>
+     {(b.title||b.subtitle||b.cta_url||b.button_url)&&<div className="banner-auto-copy">{b.title&&<h2>{b.title}</h2>}{b.subtitle&&<p>{b.subtitle}</p>}{(b.cta_url||b.button_url)&&<button className="banner-cta" type="button" onClick={()=>{location.href=b.cta_url||b.button_url}}>SHOP NOW</button>}</div>}
+   </article>)}</div>
+   {count>1&&<><button className="banner-arrow left" type="button" onClick={()=>go(index-1)} aria-label="Previous banner"><Icon name="chevronLeft"/></button><button className="banner-arrow right" type="button" onClick={()=>go(index+1)} aria-label="Next banner"><Icon name="chevronRight"/></button><div className="banner-dots">{banners.map((b:any,i:number)=><button type="button" key={b.id||i} className={i===index?"active":""} onClick={()=>setIndex(i)} aria-label={`Go to banner ${i+1}`}/>)}</div><div className="banner-progress"><span style={{width:`${((index+1)/count)*100}%`}}/></div></>}
+ </section>;
 }
-
 function Home({home,site}:{home:any;site:any}){
   const [products,setProducts]=useState<any[]>([]);
   const banners=Array.isArray(home?.banners)?home.banners:[];
@@ -598,7 +611,7 @@ function Home({home,site}:{home:any;site:any}){
   const founderQuote=site.settings?.founder_quote||"Every fragrance has a story. This is ours.";
   return <div>
     {home?.banners && site.settings?.show_banners !== "0" ? <BannerCarousel banners={banners}/> : null}
-    <section className="section"><SectionHeading eyebrow="THE COLLECTION" title="Featured Fragrances" text="Explore the scents currently available from SHANO SHAN."/><ProductGrid products={products}/><button className="outline center" onClick={()=>location.hash="#/shop"}>View All Fragrances</button></section>
+    <section className="section"><SectionHeading eyebrow="THE COLLECTION" title="Featured Fragrances" text="Explore the scents currently available from SHANO SHAN."/><ProductGrid products={products}/> <button className="outline center" onClick={()=>location.hash="#/shop"}>View All Fragrances</button></section>
     <section className="founder">
       <div className="founder-art">{founderImage?<img className="founder-image" src={founderImage} alt={founderName}/>:<div className="portrait-placeholder">SHANO<br/>SHAN</div>}</div>
       <div><span className="eyebrow">THE MAN BEHIND SHANO SHAN</span><h2>{founderQuote.split(". ")[0]||"Every fragrance has a story."}<br/><em>{founderQuote.includes(". ")?founderQuote.slice(founderQuote.indexOf(". ")+2):"This is ours."}</em></h2><p><strong>{founderName}</strong></p><p>{founderBio}</p><button onClick={()=>location.hash="#/about"}>Meet the Founder</button></div>
@@ -720,52 +733,51 @@ function Shop({site}:{site:any}){
  const clearFilters=()=>{setQ("");setCategory("");setGender("");setRating("");setSize("");setSort("newest");setPage(1)};
  const filterCount=[category,gender,rating,size].filter(Boolean).length;
  const filterPanel=<><button className={`filter-backdrop ${filterOpen?"open":""}`} type="button" aria-label="Close filters" onClick={()=>setFilterOpen(false)}></button><div className={`filter-drawer ${filterOpen?"open":""}`}><div className="filter-drawer-head"><div><small>FILTERS</small><h3>Refine Fragrances</h3></div><button className="filter-close" type="button" onClick={()=>setFilterOpen(false)}><Icon name="close"/></button></div><div className="filter-fields"><label>Category<select value={category} onChange={e=>{setCategory(e.target.value);setPage(1)}}><option value="">All categories</option>{cats.map(c=><option value={c.slug} key={c.id}>{c.name}</option>)}</select></label><label>Gender<select value={gender} onChange={e=>{setGender(e.target.value);setPage(1)}}><option value="">All</option><option value="Men">Men</option><option value="Women">Women</option><option value="Unisex">Unisex</option></select></label><label>Rating<select value={rating} onChange={e=>{setRating(e.target.value);setPage(1)}}><option value="">All ratings</option><option value="4">4★ & above</option><option value="3">3★ & above</option><option value="2">2★ & above</option></select></label><label>Size / ML<select value={size} onChange={e=>{setSize(e.target.value);setPage(1)}}><option value="">All sizes</option>{sizes.map(x=><option key={x}>{x}</option>)}</select></label><label>Sort by<select value={sort} onChange={e=>{setSort(e.target.value);setPage(1)}}><option value="newest">Newest</option><option value="price_asc">Price: Low → High</option><option value="price_desc">Price: High → Low</option><option value="rating">Rating</option><option value="views">Most Viewed</option></select></label></div><div className="filter-drawer-actions"><button type="button" onClick={clearFilters}>Clear All</button><button className="primary" type="button" onClick={()=>{setPage(1);load();setFilterOpen(false)}}>Apply Filters</button></div></div></>;
- return <section className="section shop shop-page"><div className="shop-hero"><span className="eyebrow">THE SHANO SHAN COLLECTION</span><h1>All Fragrances</h1><p>Discover refined scents crafted for every mood, moment and signature.</p></div><div className="shop-toolbar"><div className="shop-search"><Icon name="search" size={18}/><input placeholder="Search fragrances..." value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){setPage(1);load()}}}/><button type="button" onClick={()=>{setPage(1);load()}}>Search</button></div>{site.settings?.show_filters !== "0" && <button className="filter-trigger" type="button" onClick={()=>setFilterOpen(true)}><Icon name="filter" size={18}/> Filters{filterCount>0&&<b>{filterCount}</b>}</button>}</div>{site.settings?.show_filters !== "0" && filterPanel}{loading?<div className="shop-state"><img src={logoMark} alt=""/><span>Loading fragrances…</span></div>:loadError?<div className="shop-state shop-error"><img src={logoMark} alt=""/><h3>Fragrances are taking a moment to load.</h3><p>{loadError}</p><button type="button" onClick={load}>Try Again</button></div>:products.length?<ProductGrid products={products}/>:<div className="shop-state"><img src={logoMark} alt=""/><h3>No fragrances found</h3><p>Try another search or clear your filters.</p></div>}<div className="pager">{page>1&&<button onClick={()=>setPage(page-1)} type="button">Previous</button>}<span>{products.length} of {total}</span>{page*12<total&&<button onClick={()=>setPage(page+1)} type="button">Next</button>}</div></section>;
+ return <section className="section shop shop-page"><div className="shop-hero"><span className="eyebrow">THE SHANO SHAN COLLECTION</span><h1>All Fragrances</h1><p>Discover refined scents crafted for every mood, moment and signature.</p></div><div className="shop-toolbar"><div className="shop-search"><Icon name="search" size={18}/><input placeholder="Search fragrances..." value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){setPage(1);load()}}}/><button type="button" onClick={()=>{setPage(1);load()}}>Search</button></div>{site.settings?.show_filters !== "0" && <button className="filter-trigger" type="button" onClick={()=>setFilterOpen(true)}><Icon name="filter" size={18}/> Filters{filterCount>0&&<b>{filterCount}</b>}</button>}</div>{site.settings?.show_filters !== "0" && filterPanel}{loading?<div className="shop-state"><img src={logoMark} alt=""/><span>Loading fragrances…</span></div>:loadError?<div className="shop-state shop-error"><img src={logoMark} alt=""/><h3>Fragrances are taking a moment to load.</h3><p>{loadError}</p><button type="button" onClick={load}>Try Again</button></div>:products.length?<ProductGrid products={products} expandVariants={site.settings?.show_variant_cards !== "0"} variantFilter={size}/>:<div className="shop-state"><img src={logoMark} alt=""/><h3>No fragrances found</h3><p>Try another search or clear your filters.</p></div>}<div className="pager">{page>1&&<button onClick={()=>setPage(page-1)} type="button">Previous</button>}<span>{products.length} of {total}</span>{page*12<total&&<button onClick={()=>setPage(page+1)} type="button">Next</button>}</div></section>;
 }
 
 /* =========================================================
    PRODUCTS
 ========================================================= */
 
-function ProductGrid({
-  products,
-}: {
-  products: any[];
-}) {
-  return (
-    <div className="product-grid">
-      {products.map((p) => (
-        <ProductCard
-          p={p}
-          key={p.id}
-        />
-      ))}
-    </div>
-  );
+function ProductGrid({products,expandVariants=false,variantFilter=""}:{products:any[];expandVariants?:boolean;variantFilter?:string}){
+  const items:any[]=[];
+  products.forEach((p:any)=>{
+    let variants=(p.variants||[]).filter((v:any)=>v.active!==false);
+    if(variantFilter) variants=variants.filter((v:any)=>String(v.name||v.ml||v.size||"").toLowerCase()===String(variantFilter).toLowerCase());
+    if(expandVariants && variants.length){variants.forEach((v:any)=>items.push({p,variant:v}))}
+    else if(!variantFilter) items.push({p,variant:null});
+    else if(p.selected_variant||p.variant) items.push({p,variant:p.selected_variant||p.variant});
+  });
+  return <div className="product-grid">{items.map((item:any,i:number)=><ProductCard p={item.p} variant={item.variant} key={`${item.p.id}-${item.variant?.id||"base"}-${i}`}/>)}</div>;
 }
 
-function ProductCard({p}:{p:any}){
+function ProductCard({p,variant}:{p:any;variant?:any}){
  const {addToCart,toast,site}=useStore();
  const [shareOpen,setShareOpen]=useState(false);
- const url=`${location.origin}${location.pathname}#/product/${encodeURIComponent(p.slug)}`;
- const nativeShare=async()=>{try{if((navigator as any).share)await (navigator as any).share({title:p.name,text:`${p.name} — SHANO SHAN Fragrance`,url});else{await navigator.clipboard.writeText(url);toast("Product link copied");}}catch{}};
- const social=(kind:string)=>{const enc=encodeURIComponent(url),text=encodeURIComponent(`${p.name} — SHANO SHAN Fragrance`);const links:any={whatsapp:`https://wa.me/?text=${text}%20${enc}`,facebook:`https://www.facebook.com/sharer/sharer.php?u=${enc}`,x:`https://twitter.com/intent/tweet?text=${text}&url=${enc}`};if(kind==='copy'){navigator.clipboard?.writeText(url).then(()=>toast("Product link copied"));return;}window.open(links[kind],"_blank","noopener,noreferrer,width=650,height=700");};
- return <article className="product-card"><a href={`#/product/${encodeURIComponent(p.slug)}`}><div className="product-image">{p.image_url?<img src={p.image_url} alt={p.name} loading="lazy" onError={(e:any)=>{e.currentTarget.style.display="none"}}/>:<span>SHANO SHAN</span>}{p.featured?<span className="product-badge">FEATURED</span>:null}</div><div className="product-info"><small>{p.category_name||p.gender||"FRAGRANCE"}</small><h3>{p.name}</h3><strong>{money(p.sale_price??p.price)}</strong>{p.sale_price&&<del>{money(p.price)}</del>}</div></a><div className="product-actions"><button className="cart-button" onClick={()=>addToCart(p)} type="button">ADD TO CART</button>{site?.settings?.show_share !== "0"&&<div className="share-wrap"><button className="share-button" onClick={()=>setShareOpen(v=>!v)} type="button" aria-label={`Share ${p.name}`}><Icon name="share" size={17}/></button>{shareOpen&&<div className="share-menu"><button onClick={nativeShare}>Share</button><button onClick={()=>social('whatsapp')}><Icon name="whatsapp" size={15}/> WhatsApp</button><button onClick={()=>social('facebook')}><Icon name="facebook" size={15}/> Facebook</button><button onClick={()=>social('x')}><Icon name="x" size={15}/> X</button><button onClick={()=>social('copy')}><Icon name="copy" size={15}/> Copy link</button></div>}</div>}</div></article>;
+ const url=`${location.origin}${location.pathname}#/product/${encodeURIComponent(p.slug)}${variant?.id?`?variant=${encodeURIComponent(variant.id)}`:""}`;
+ const displayImage=variant?.image_url||variant?.secure_url||variant?.image?.secure_url||p.image_url;
+ const displayName=variant?.name?`${p.name} · ${variant.name}`:p.name;
+ const displayPrice=variant?.sale_price??variant?.price??p.sale_price??p.price;
+ const nativeShare=async()=>{try{if((navigator as any).share)await (navigator as any).share({title:displayName,text:`${displayName} — SHANO SHAN Fragrance`,url});else{await navigator.clipboard.writeText(url);toast("Product link copied");}}catch{}};
+ const social=(kind:string)=>{const enc=encodeURIComponent(url),text=encodeURIComponent(`${displayName} — SHANO SHAN Fragrance`);const links:any={whatsapp:`https://wa.me/?text=${text}%20${enc}`,facebook:`https://www.facebook.com/sharer/sharer.php?u=${enc}`,x:`https://twitter.com/intent/tweet?text=${text}&url=${enc}`};if(kind==='copy'){navigator.clipboard?.writeText(url).then(()=>toast("Product link copied"));return;}window.open(links[kind],"_blank","noopener,noreferrer,width=650,height=700");};
+ const add=()=>addToCart(p,1,variant?.id);
+ return <article className="product-card"><a href={`#/product/${encodeURIComponent(p.slug)}${variant?.id?`?variant=${encodeURIComponent(variant.id)}`:""}`}><div className="product-image">{displayImage?<img src={displayImage} alt={displayName} loading="lazy" onError={(e:any)=>{e.currentTarget.style.objectFit="contain"}}/>:<span>SHANO SHAN</span>}{p.featured?<span className="product-badge">FEATURED</span>:null}{variant?.name&&<span className="variant-card-tag">{variant.name}</span>}</div><div className="product-info"><small>{p.category_name||p.gender||"FRAGRANCE"}</small><h3>{displayName}</h3><strong>{money(displayPrice)}</strong>{variant?.sale_price&&<del>{money(variant.price)}</del>}{!variant&&p.sale_price&&<del>{money(p.price)}</del>}</div></a><div className="product-actions"><button className="cart-button" onClick={add} type="button">ADD TO CART</button>{site?.settings?.show_share !== "0"&&<div className="share-wrap"><button className="share-button" onClick={()=>setShareOpen(v=>!v)} type="button" aria-label={`Share ${displayName}`}><Icon name="share" size={17}/></button>{shareOpen&&<div className="share-menu"><button onClick={nativeShare}>Share</button><button onClick={()=>social('whatsapp')}><Icon name="whatsapp" size={15}/> WhatsApp</button><button onClick={()=>social('facebook')}><Icon name="facebook" size={15}/> Facebook</button><button onClick={()=>social('x')}><Icon name="x" size={15}/> X</button><button onClick={()=>social('copy')}><Icon name="copy" size={15}/> Copy link</button></div>}</div>}</div></article>;
 }
 
 /* =========================================================
    PRODUCT DETAIL
 ========================================================= */
 
-function Product({slug}:{slug:string}) {
+function Product({slug,initialVariantId}:{slug:string;initialVariantId?:number}) {
   const [p,setP]=useState<any>(null),[qty,setQty]=useState(1),[img,setImg]=useState(""),[selectedVariant,setSelectedVariant]=useState<any>(null),[reviews,setReviews]=useState<any[]>([]),[breakdown,setBreakdown]=useState<any[]>([]),[review,setReview]=useState(false);
   const {addToCart,user,toast}=useStore();
   const [zoom,setZoom]=useState(false);
-  useEffect(()=>{api(`/api/products/${encodeURIComponent(slug)}`).then(x=>{setP(x.product);setImg(x.product.images?.[0]?.secure_url||"");setSelectedVariant(x.product.variants?.[0]||null);api(`/api/products/${x.product.id}/reviews`).then(r=>{setReviews(r.reviews||[]);setBreakdown(r.breakdown||[])}).catch(()=>{});api(`/api/products/${x.product.id}/view`,{method:"POST"}).catch(()=>{})}).catch(()=>{})},[slug]);
+  useEffect(()=>{api(`/api/products/${encodeURIComponent(slug)}`).then(x=>{setP(x.product);setImg(x.product.images?.[0]?.secure_url||"");setSelectedVariant((x.product.variants||[]).find((v:any)=>Number(v.id)===Number(initialVariantId))||x.product.variants?.[0]||null);api(`/api/products/${x.product.id}/reviews`).then(r=>{setReviews(r.reviews||[]);setBreakdown(r.breakdown||[])}).catch(()=>{});api(`/api/products/${x.product.id}/view`,{method:"POST"}).catch(()=>{})}).catch(()=>{})},[slug,initialVariantId]);
   if(!p)return <section className="section loading">Loading fragrance...</section>;
   const variant=selectedVariant, stock=variant?Number(variant.stock):Number(p.stock), price=variant?.sale_price??variant?.price??p.sale_price??p.price, minQ=Math.max(1,Number(p.min_quantity||1)), maxQ=Math.min(Number(p.max_quantity||99),stock||99);
   const buyNow=async()=>{await addToCart(p,qty,variant?.id);location.hash="#/checkout"};
-  return <section className="section product-detail"><div className="gallery"><div className="main-image" onClick={()=>img&&setZoom(true)} role={img?"button":undefined} tabIndex={img?0:undefined} onKeyDown={e=>{if(img&&(e.key==='Enter'||e.key===' '))setZoom(true)}}>{img?<img src={img} alt={p.name}/>:<span>SHANO SHAN</span>}</div><div className="thumbs">{p.images?.map((i:any)=><button key={i.id} onClick={()=>setImg(i.secure_url)} type="button"><img src={i.secure_url} alt={p.name}/></button>)}</div></div><div className="product-copy"><span className="eyebrow">{p.fragrance_family||p.gender||"SIGNATURE FRAGRANCE"}</span><h1>{p.name}</h1><div className="price">{money(price)}{variant?.sale_price&&<del>{money(variant.price)}</del>}</div>{p.rating>0&&<p>★★★★★ {Number(p.rating).toFixed(1)} · {p.review_count} ratings</p>}<ProductShare p={p}/><p>{p.short_description||p.description}</p>{p.variants?.length>0&&<div className="variant-picker"><div className="variant-title"><span className="eyebrow">SIZE / ML</span><b>Choose your size</b></div><div className="variant-grid">{p.variants.map((v:any)=><button key={v.id} className={selectedVariant?.id===v.id?"variant-option active":"variant-option"} disabled={!v.active||v.stock<=0} onClick={()=>{setSelectedVariant(v);setQty(Math.max(minQ,1))}} type="button"><strong>{v.name}</strong><span>{money(v.sale_price??v.price)}</span>{v.stock<=0&&<small>Out of stock</small>}</button>)}</div></div>}{stock<=0?<b className="sold">Out of stock</b>:<><div className="qty"><button onClick={()=>setQty(Math.max(minQ,qty-1))} type="button">−</button><b>{qty}</b><button onClick={()=>setQty(Math.min(maxQ,qty+1))} type="button">+</button></div><small>Minimum {minQ} · Maximum {maxQ}</small><button className="wide" onClick={()=>addToCart(p,qty,variant?.id)} type="button">ADD TO CART</button><button className="wide" onClick={buyNow} type="button">BUY NOW</button></>}{p.top_notes&&<div className="notes"><div><b>Top Notes</b><span>{p.top_notes}</span></div>{p.heart_notes&&<div><b>Heart Notes</b><span>{p.heart_notes}</span></div>}{p.base_notes&&<div><b>Base Notes</b><span>{p.base_notes}</span></div>}</div>}<button className="text-btn" onClick={()=>{if(!user){toast("Please log in to leave a review");return}setReview(!review)}} type="button">Write a review</button>{review&&<Review productId={p.id}/>}<div className="reviews"><h3>Customer Reviews</h3>{reviews.length?reviews.map((r:any)=><article key={r.id}><b>{"★".repeat(r.rating)}{"☆".repeat(5-r.rating)}</b><small>{r.name}{r.verified_purchase?" · Verified Purchase":""}</small><p>{r.body}</p></article>):<p>No approved reviews yet.</p>}</div></div>{zoom&&<div className="image-lightbox" role="dialog" aria-modal="true" onClick={()=>setZoom(false)}><button type="button" aria-label="Close image" onClick={()=>setZoom(false)}>×</button><img src={img} alt={p.name} onClick={e=>e.stopPropagation()}/></div>}</section>;
+  return <section className="section product-detail"><div className="gallery"><div className="main-image" onClick={()=>img&&setZoom(true)} role={img?"button":undefined} tabIndex={img?0:undefined} onKeyDown={e=>{if(img&&(e.key==='Enter'||e.key===' '))setZoom(true)}}>{img?<img src={img} alt={p.name}/>:<span>SHANO SHAN</span>}</div><div className="thumbs">{p.images?.map((i:any)=><button key={i.id} onClick={()=>setImg(i.secure_url)} type="button"><img src={i.secure_url} alt={p.name}/></button>)}</div></div><div className="product-copy"><span className="eyebrow">{p.fragrance_family||p.gender||"SIGNATURE FRAGRANCE"}</span><h1>{p.name}</h1><div className="price">{money(price)}{variant?.sale_price&&<del>{money(variant.price)}</del>}</div>{p.rating>0&&<p>★★★★★ {Number(p.rating).toFixed(1)} · {p.review_count} ratings</p>}<ProductShare p={p}/><p>{p.short_description||p.description}</p>{p.variants?.length>0&&<div className="variant-picker"><div className="variant-title"><span className="eyebrow">SIZE / ML</span><b>Choose your size</b></div><div className="variant-grid">{p.variants.map((v:any)=><button key={v.id} className={selectedVariant?.id===v.id?"variant-option active":"variant-option"} disabled={!v.active||v.stock<=0} onClick={()=>{setSelectedVariant(v);setImg(v.image_url||v.secure_url||v.image?.secure_url||p.images?.[0]?.secure_url||"");setQty(Math.max(minQ,1))}} type="button"><strong>{v.name}</strong><span>{money(v.sale_price??v.price)}</span>{v.stock<=0&&<small>Out of stock</small>}</button>)}</div></div>}{stock<=0?<b className="sold">Out of stock</b>:<><div className="qty"><button onClick={()=>setQty(Math.max(minQ,qty-1))} type="button">−</button><b>{qty}</b><button onClick={()=>setQty(Math.min(maxQ,qty+1))} type="button">+</button></div><small>Minimum {minQ} · Maximum {maxQ}</small><button className="wide" onClick={()=>addToCart(p,qty,variant?.id)} type="button">ADD TO CART</button><button className="wide" onClick={buyNow} type="button">BUY NOW</button></>}{p.top_notes&&<div className="notes"><div><b>Top Notes</b><span>{p.top_notes}</span></div>{p.heart_notes&&<div><b>Heart Notes</b><span>{p.heart_notes}</span></div>}{p.base_notes&&<div><b>Base Notes</b><span>{p.base_notes}</span></div>}</div>}<button className="text-btn" onClick={()=>{if(!user){toast("Please log in to leave a review");return}setReview(!review)}} type="button">Write a review</button>{review&&<Review productId={p.id}/>}<div className="reviews"><h3>Customer Reviews</h3>{reviews.length?reviews.map((r:any)=><article key={r.id}><b>{"★".repeat(r.rating)}{"☆".repeat(5-r.rating)}</b><small>{r.name}{r.verified_purchase?" · Verified Purchase":""}</small><p>{r.body}</p></article>):<p>No approved reviews yet.</p>}</div></div>{zoom&&<div className="image-lightbox" role="dialog" aria-modal="true" onClick={()=>setZoom(false)}><button type="button" aria-label="Close image" onClick={()=>setZoom(false)}>×</button><img src={img} alt={p.name} onClick={e=>e.stopPropagation()}/></div>}</section>;
 }
 
 function ProductShare({p}:{p:any}){const {toast,site}=useStore();const [open,setOpen]=useState(false);const url=`${location.origin}${location.pathname}#/product/${encodeURIComponent(p.slug)}`;const native=async()=>{try{if((navigator as any).share)await (navigator as any).share({title:p.name,text:`${p.name} — SHANO SHAN Fragrance`,url});else{await navigator.clipboard.writeText(url);toast("Product link copied")}}catch{}};const social=(k:string)=>{const e=encodeURIComponent(url),t=encodeURIComponent(`${p.name} — SHANO SHAN Fragrance`);if(k==='copy'){navigator.clipboard?.writeText(url).then(()=>toast("Product link copied"));return}const l:any={whatsapp:`https://wa.me/?text=${t}%20${e}`,facebook:`https://www.facebook.com/sharer/sharer.php?u=${e}`,x:`https://twitter.com/intent/tweet?text=${t}&url=${e}`};window.open(l[k],"_blank","noopener,noreferrer,width=650,height=700")};return site?.settings?.show_share === "0" ? null : <div className="product-share"><span>SHARE</span><button type="button" onClick={()=>setOpen(v=>!v)}><Icon name="share" size={16}/> Share Product</button>{open&&<div className="product-share-menu"><button onClick={native}>Share</button><button onClick={()=>social('whatsapp')}><Icon name="whatsapp" size={15}/> WhatsApp</button><button onClick={()=>social('facebook')}><Icon name="facebook" size={15}/> Facebook</button><button onClick={()=>social('x')}><Icon name="x" size={15}/> X</button><button onClick={()=>social('copy')}><Icon name="copy" size={15}/> Copy link</button></div>}</div>}

@@ -47,3 +47,33 @@
 input[type="date"],input[type="datetime-local"]{color-scheme:dark}
 
 .admin-notice-wrap{position:relative;margin-left:auto}.admin-notice-btn{position:relative;background:#15120e;border:1px solid #4a3923;color:#d6ad58;border-radius:10px;padding:10px 13px}.admin-notice-btn b{position:absolute;right:-5px;top:-6px;min-width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:#d6ad58;color:#080808;font-size:9px}.admin-notice-pop{position:absolute;right:0;top:48px;width:min(380px,90vw);max-height:520px;overflow:auto;background:#0d0d0d;border:1px solid #4a3923;box-shadow:0 20px 50px rgba(0,0,0,.55);z-index:900}.admin-notice-head{display:flex;justify-content:space-between;padding:13px;border-bottom:1px solid #2c241a}.admin-notice-head button{background:transparent;color:#aaa}.admin-notice-item{display:grid;gap:4px;width:100%;text-align:left;padding:12px;border:0;border-bottom:1px solid #211b14;background:#111;color:#eee}.admin-notice-item.read{opacity:.6}.admin-notice-item span,.admin-notice-item small{color:#999;font-size:11px}.admin-notice-item:hover{background:#18130d}
+
+/* SHANO SHAN 2026-09-26 admin professional controls / banners / variants */
+.controls-panel{overflow:hidden}
+.controls-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:8px 0 24px;border-bottom:1px solid #2b241b;margin-bottom:22px}
+.controls-hero h2{margin:7px 0 8px}
+.controls-hero p{margin:0;color:#8f877c;max-width:680px;line-height:1.6}
+.status-pill{padding:8px 11px;border-radius:999px;font-size:9px;letter-spacing:1.4px;font-weight:800;white-space:nowrap}
+.status-pill.live{background:rgba(54,160,93,.12);border:1px solid rgba(54,160,93,.35);color:#7bd39b}
+.status-pill.maintenance{background:rgba(214,173,88,.12);border:1px solid rgba(214,173,88,.45);color:#e5c77f}
+.control-section{padding:20px 0;border-bottom:1px solid #2b241b}
+.control-section h3{font-size:14px;letter-spacing:1.2px;text-transform:uppercase;color:#d6ad58;margin:0 0 15px}
+.featured-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+.banner-editor{border-color:#4b3a23;box-shadow:0 18px 60px rgba(0,0,0,.18)}
+.banner-upload-zone{min-height:190px;border:1px dashed #6a5434;background:radial-gradient(circle at 50% 40%,#18140e,#0d0d0d);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;position:relative;text-align:center;padding:25px;transition:.2s ease}
+.banner-upload-zone:hover{border-color:#d6ad58;background:#11100d}
+.banner-upload-icon{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;border:1px solid #6a5434;color:#d6ad58;font-size:24px}
+.banner-upload-zone small{color:#777067;max-width:500px}
+.banner-preview{margin:18px 0;border:1px solid #32291e;background:#090909;border-radius:12px;overflow:hidden;max-height:300px}
+.banner-preview img{display:block;width:100%;height:300px;object-fit:cover}
+.banner-list{display:grid;gap:10px}
+.banner-admin{display:grid;grid-template-columns:150px minmax(0,1fr) auto;align-items:center;gap:16px;padding:12px;border:1px solid #2d261e;background:#0f0f0f;border-radius:12px}
+.banner-admin-preview{height:78px;border-radius:8px;overflow:hidden;background:#17130e;border:1px solid #30271d;display:grid;place-items:center;color:#777}
+.banner-admin-preview img{width:100%;height:100%;object-fit:cover}
+.banner-admin-info{min-width:0}.banner-admin-info b{display:block;font-size:13px}.banner-admin-info small{display:block;color:#888;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.banner-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.banner-actions button{font-size:10px;padding:8px 10px}
+.variant-manager-modal{max-width:980px}
+.variant-admin-cell{display:flex;align-items:center;gap:10px;min-width:170px}.variant-admin-cell img{width:48px;height:48px;object-fit:contain;background:#14120f;border:1px solid #33291e;border-radius:7px}.variant-no-image{width:48px;height:48px;display:grid;place-items:center;background:#14120f;border:1px solid #33291e;border-radius:7px;color:#777;font-size:8px;text-align:center}
+.variant-table .trow{align-items:center}
+@media(max-width:760px){.controls-hero{flex-direction:column}.featured-controls{grid-template-columns:1fr}.banner-admin{grid-template-columns:82px minmax(0,1fr)}.banner-admin-preview{height:58px}.banner-actions{grid-column:1/-1;justify-content:flex-start}.banner-preview img{height:190px}.variant-manager-modal{width:96vw}.variant-table .trow{grid-template-columns:1fr 1fr}.variant-admin-cell{grid-column:1/-1}}
