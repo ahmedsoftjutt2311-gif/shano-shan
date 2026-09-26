@@ -97,6 +97,14 @@ function App() {
   const [user, setUser] = useState<any>(null);
   const [cart, setCart] = useState<any>({ items: [] });
   const [toast, setToast] = useState("");
+  const [globalLoading, setGlobalLoading] = useState(false);
+
+  useEffect(()=>{
+    const onLoading=(e:any)=>setGlobalLoading(Number(e.detail||0)>0);
+    window.addEventListener("ss-loading",onLoading as EventListener);
+    return ()=>window.removeEventListener("ss-loading",onLoading as EventListener);
+  },[]);
+
   /*
    * IMPORTANT:
    * This is true only when the React application initially loads.
@@ -271,9 +279,17 @@ function App() {
 
       <Footer site={site} />
       <ShanoAIWidget />
+      {globalLoading && <BrandLoadingOverlay />}
+
       {toast && <div className="toast">{toast}</div>}
     </Ctx.Provider>
   );
+}
+
+function BrandLoadingOverlay(){
+  return <div className="brand-loading" role="status" aria-live="polite">
+    <img className="loading-mark" src={logoMark} alt="SHANO SHAN"/>
+  </div>;
 }
 
 /* =========================================================
@@ -362,7 +378,8 @@ function Icon({name,size=20}:{name:string;size?:number}){
     phone:<><path d="M6.5 3.8 9 3l2 4-2 1.7a13 13 0 0 0 6.3 6.3L17 13l4 2-.8 2.5c-.3.9-1.1 1.5-2 1.5C10.8 19 5 13.2 5 6c0-1 .6-1.8 1.5-2.2z"/></>,
     globe:<><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.2 2.5 3.3 5.5 3.3 9S14.2 18.5 12 21c-2.2-2.5-3.3-5.5-3.3-9S9.8 5.5 12 3z"/></>,
     bell:<><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
-    filter:<><path d="M4 6h16M7 12h10M10 18h4"/></>
+    filter:<><path d="M4 6h16M7 12h10M10 18h4"/></>,
+    share:<><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.5-4.4M8.2 13.2l7.5 4.4"/></>
   };
   return <svg {...common}>{paths[name]}</svg>;
 }
@@ -754,6 +771,41 @@ function Shop(){
    PRODUCTS
 ========================================================= */
 
+async function shareUrl(title:string, url:string, toast?:(s:string)=>void){
+  try{
+    if(navigator.share){
+      await navigator.share({title, text:title, url});
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+    toast?.("Link copied — share it anywhere.");
+  }catch(e:any){
+    if(e?.name !== "AbortError") toast?.("Unable to share right now.");
+  }
+}
+
+function ProductShare({p}:{p:any}){
+  const {toast}=useStore();
+  const url=`${window.location.origin}${window.location.pathname}#/product/${encodeURIComponent(p.slug)}`;
+  const whatsapp=`https://wa.me/?text=${encodeURIComponent(`${p.name} — ${url}`)}`;
+  const facebook=`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+  const twitter=`https://twitter.com/intent/tweet?text=${encodeURIComponent(p.name)}&url=${encodeURIComponent(url)}`;
+  const open=(u:string)=>window.open(u,"_blank","noopener,noreferrer,width=700,height=600");
+  return <div className="product-share" aria-label="Share product">
+    <span>Share</span>
+    <button type="button" className="share-whatsapp" title="Share on WhatsApp" aria-label="Share on WhatsApp" onClick={()=>open(whatsapp)}><Icon name="whatsapp" size={17}/></button>
+    <button type="button" className="share-facebook" title="Share on Facebook" aria-label="Share on Facebook" onClick={()=>open(facebook)}><Icon name="facebook" size={17}/></button>
+    <button type="button" className="share-x" title="Share on X" aria-label="Share on X" onClick={()=>open(twitter)}><span>𝕏</span></button>
+    <button type="button" className="share-native" title="Share product" aria-label="Share product" onClick={()=>shareUrl(p.name,url,toast)}><Icon name="share" size={17}/></button>
+  </div>;
+}
+
+function AppShare(){
+  const {toast}=useStore();
+  const url=window.location.origin+window.location.pathname;
+  return <button className="app-share-btn" type="button" onClick={()=>shareUrl("SHANO SHAN FRAGRANCE",url,toast)}><Icon name="share" size={16}/> Share SHANO SHAN</button>;
+}
+
 function ProductGrid({
   products,
 }: {
@@ -817,12 +869,10 @@ function ProductCard({
         </div>
       </a>
 
-      <button
-        onClick={() => addToCart(p)}
-        type="button"
-      >
-        Add to Bag
-      </button>
+      <div className="product-card-actions">
+        <button className="cart-action" onClick={() => addToCart(p)} type="button">Add to Bag</button>
+        <button className="card-share" type="button" aria-label={`Share ${p.name}`} title="Share product" onClick={(e)=>{e.preventDefault();e.stopPropagation();shareUrl(p.name,`${window.location.origin}${window.location.pathname}#/product/${encodeURIComponent(p.slug)}`)}}><Icon name="share" size={17}/></button>
+      </div>
     </article>
   );
 }
@@ -1793,7 +1843,7 @@ function Footer({site}:{site:any}){
       <p>{s.footer_text||"Luxury fragrance, crafted to become part of your story."}</p>
       {links.length>0&&<div className="social-row">
         {links.map(([name,url,icon]:any)=><button className={`social-${icon}`} key={name} title={name} aria-label={name} onClick={()=>openExternal(url)}><Icon name={icon} size={17}/></button>)}
-      </div>}
+      </div>}<AppShare/>
     </div>
     <div><h4>Explore</h4><a href="#/shop">Shop</a><a href="#/about">About</a><a href="#/contact">Contact</a><a href="#/policies">Policies</a></div>
     <div><h4>Account</h4><a href="#/account">Login</a><a href="#/orders">Orders</a><a href="#/cart">Cart</a></div>
