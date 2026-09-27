@@ -185,9 +185,24 @@ app.post('/api/ai/chat',async c=>{
   const mode=body.mode==='admin'?'admin':'customer';
   if(!message)return json({error:'Message is required'},400);
 
+  let customer:any=null;
   if(mode==='admin'){
     const auth=await requireStaff(c);
     if('error'in auth)return json({error:auth.error},auth.status);
+  }else{
+    customer=await userFromReq(c);
+    if(!customer)return json({error:'Login required'},401);
+    // Per-user daily AI quota, enforced in D1. The conditional INSERT only records a
+    // use while the user is still under the limit, so concurrent requests cannot
+    // race past it; the row count of that statement decides the 429.
+    const quota=await c.env.DB.prepare(`
+      INSERT INTO ai_usage(user_id)
+      SELECT ?, WHERE (SELECT COUNT(*) FROM ai_usage
+        WHERE user_id=? AND created_at>=datetime('now','start of day'))<20
+      RETURNING id
+    `).bind(customer.id,customer.id).run();
+    if(!quota.meta.changes)return json({error:'Too many AI requests. Please try again tomorrow.'},429);
+    await c.env.DB.prepare("DELETE FROM ai_usage WHERE created_at<datetime('now','-2 day')").run().catch(()=>{});
   }
 
   let aiSystem='';
@@ -196,7 +211,8 @@ app.post('/api/ai/chat',async c=>{
     const products=(await c.env.DB.prepare(`
       SELECT p.id,p.name,p.slug,p.category_id,p.gender,p.description,p.short_description,p.tags,
       p.top_notes,p.heart_notes,p.base_notes,p.price,p.sale_price,p.stock,p.min_quantity,p.max_quantity,
-      (SELECT GROUP_CONCAT(v.name||' @ PKR '||COALESCE(v.sale_price,v.price)||' / stock '||v.stock)
+      (SELECT GROUP_CONCAT(v.name||' @ PKR '||COALESCE(v.sale_price,v.price)||' - '||
+        CASE WHEN v.stock>0 THEN 'in stock' ELSE 'out of stock' END)
        FROM product_variants v WHERE v.product_id=p.id AND v.active=1) variants
       FROM products p WHERE p.active=1 ORDER BY p.id DESC LIMIT 60
     `).all()).results as any[];
@@ -215,13 +231,13 @@ app.post('/api/ai/chat',async c=>{
     `).all()).results as any[];
 
     const rules=(await c.env.DB.prepare(`
-      SELECT min_qty,max_qty,fee FROM delivery_rules WHERE active=1 ORDER BY min_qty
+      SELECT min_qty,fee FROM delivery_rules WHERE active=1 ORDER BY min_qty
     `).all()).results as any[];
 
     const catalog=products.map((p:any)=>({
       name:p.name,gender:p.gender,description:p.short_description||p.description||'',
       tags:p.tags||'',top_notes:p.top_notes||'',heart_notes:p.heart_notes||'',base_notes:p.base_notes||'',
-      price:p.sale_price??p.price,stock:p.stock,minimum:p.min_quantity||1,maximum:p.max_quantity||99,
+      price:p.sale_price??p.price,available:p.stock>0,
       variants:p.variants||''
     }));
 

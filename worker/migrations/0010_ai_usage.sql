@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS ai_usage(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_usage_user_time
+ON ai_usage(user_id, created_at);

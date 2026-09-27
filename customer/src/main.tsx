@@ -313,7 +313,7 @@ function App() {
       </main>
 
       <Footer site={site} />
-      {site.settings?.show_ai !== "0" && <ShanoAIWidget />}
+      {user && site.settings?.show_ai !== "0" && <ShanoAIWidget />}
       {globalLoading && <BrandLoadingOverlay />}
 
       {toast && <div className="toast">{toast}</div>}
