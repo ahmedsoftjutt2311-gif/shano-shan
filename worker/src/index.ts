@@ -89,18 +89,37 @@ async function cart(c:any){const u=await userFromReq(c),guest=c.req.header('X-Ca
   if(u&&guest){
     const guestCart:any=await c.env.DB.prepare('SELECT * FROM carts WHERE guest_token=?').bind(guest).first();
     if(guestCart&&guestCart.id!==row.id){
-      const guestItems=(await c.env.DB.prepare('SELECT * FROM cart_items WHERE cart_id=?').bind(guestCart.id).all()).results as any[];
+      const db=c.env.DB;
+      const guestItems=(await db.prepare('SELECT * FROM cart_items WHERE cart_id=?').bind(guestCart.id).all()).results as any[];
+      const ops:any[]=[];
       for(const gi of guestItems){
-        const stockRow:any=gi.variant_id?await c.env.DB.prepare('SELECT stock FROM product_variants WHERE id=?').bind(gi.variant_id).first():await c.env.DB.prepare('SELECT stock FROM products WHERE id=?').bind(gi.product_id).first();
-        const stock=Number(stockRow?.stock||0);
-        const existing:any=await c.env.DB.prepare('SELECT id,quantity FROM cart_items WHERE cart_id=? AND product_id=? AND variant_id IS ?').bind(row.id,gi.product_id,gi.variant_id).first();
-        const desired=Math.min(99,stock,(existing?.quantity||0)+gi.quantity);
-        if(desired<=0)continue;
-        if(existing)await c.env.DB.prepare('UPDATE cart_items SET quantity=? WHERE id=?').bind(desired,existing.id).run();
-        else await c.env.DB.prepare('INSERT INTO cart_items(cart_id,product_id,variant_id,quantity) VALUES(?,?,?,?)').bind(row.id,gi.product_id,gi.variant_id,desired).run();
+        // Only a truly dangling line (product/variant row deleted) is skipped; an
+        // existing row is always kept. In-stock lines cap at current stock, while
+        // out-of-stock lines keep their merged quantity so the user's cart state is
+        // preserved — checkout already reports availability when it matters.
+        const stockRow:any=gi.variant_id?await db.prepare('SELECT stock FROM product_variants WHERE id=?').bind(gi.variant_id).first():await db.prepare('SELECT stock FROM products WHERE id=?').bind(gi.product_id).first();
+        if(!stockRow)continue;
+        const stock=Number(stockRow.stock||0);
+        const existing:any=await db.prepare('SELECT id,quantity FROM cart_items WHERE cart_id=? AND product_id=? AND variant_id IS ?').bind(row.id,gi.product_id,gi.variant_id).first();
+        const combined=Math.min(99,(existing?.quantity||0)+gi.quantity);
+        const desired=stock>0?Math.min(stock,combined):combined;
+        if(existing)ops.push(db.prepare('UPDATE cart_items SET quantity=? WHERE id=?').bind(desired,existing.id));
+        else ops.push(db.prepare('INSERT INTO cart_items(cart_id,product_id,variant_id,quantity) VALUES(?,?,?,?)').bind(row.id,gi.product_id,gi.variant_id,desired));
       }
-      await c.env.DB.prepare('DELETE FROM cart_items WHERE cart_id=?').bind(guestCart.id).run();
-      await c.env.DB.prepare('DELETE FROM carts WHERE id=?').bind(guestCart.id).run();
+      ops.push(db.prepare('DELETE FROM cart_items WHERE cart_id=?').bind(guestCart.id));
+      ops.push(db.prepare('DELETE FROM carts WHERE id=?').bind(guestCart.id));
+      // One transaction: either every merge write lands or none does, so a failed
+      // merge leaves the user cart and the guest cart exactly as they were.
+      try{
+        await db.batch(ops);
+      }catch(err){
+        // A concurrent request may have completed this same merge first (its batch
+        // deleted the guest cart), which makes this request's batch redundant rather
+        // than failed. Only rethrow when the guest cart is still there — the real
+        // error then propagates without any partial writes having been applied.
+        const stillThere=await db.prepare('SELECT id FROM carts WHERE guest_token=?').bind(guest).first();
+        if(stillThere)throw err;
+      }
     }
   }
   return {row,u,guest}}
