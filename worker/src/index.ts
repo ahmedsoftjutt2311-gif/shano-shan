@@ -112,25 +112,57 @@ app.delete('/api/cart/items/:id',async c=>{const {row}=await cart(c);await c.env
 app.post('/api/payment-receipts/preupload',async c=>{const u=await userFromReq(c);if(!u)return json({error:'Login required'},401);const fd=await c.req.formData(),file=fd.get('receipt');if(!(file instanceof File)||file.size>8*1024*1024)return json({error:'Please upload a receipt image/PDF up to 8MB'},400);const type=file.type||'';if(!(type.startsWith('image/')||type==='application/pdf'))return json({error:'Receipt must be an image or PDF'},400);const up=await cloudinaryUpload(c,file,`shano-shan/receipts/pending/${u.id}`);const token=crypto.randomUUID();await c.env.DB.prepare('INSERT INTO receipt_uploads(token,user_id,public_id,secure_url) VALUES(?,?,?,?)').bind(token,u.id,up.public_id,up.secure_url).run();return json({token,secure_url:up.secure_url},201)});
 
 app.post('/api/orders',async c=>{const u=await userFromReq(c);if(!u)return json({error:'Please login to place your order'},401);const b=await c.req.json();if(!String(b.name||'')||!String(b.email||'')||!String(b.phone||'')||!String(b.address||'')||!String(b.city||'')||!String(b.province||''))return json({error:'Complete customer and shipping information is required, including province and city.'},400);const {row}=await cart(c);const items=(await c.env.DB.prepare('SELECT ci.*,p.name,p.sku,p.price,p.sale_price,p.stock active_stock,p.min_quantity,p.max_quantity,v.name variant_name,v.sku variant_sku,v.price variant_price,v.sale_price variant_sale_price,v.stock variant_stock,v.active variant_active FROM cart_items ci JOIN products p ON p.id=ci.product_id LEFT JOIN product_variants v ON v.id=ci.variant_id WHERE ci.cart_id=?').bind(row.id).all()).results as any[];if(!items.length)return json({error:'Cart is empty'},400);let subtotal=0;for(const i of items){if(!i.active_stock||i.quantity>Number(i.variant_id?i.variant_stock:i.active_stock))return json({error:`Insufficient stock for ${i.name}`},409);if(i.variant_id&&!i.variant_active)return json({error:`Selected size is no longer available for ${i.name}`},409);if(i.quantity<Number(i.min_quantity||1)||i.quantity>Number(i.max_quantity||99))return json({error:`Quantity limit exceeded for ${i.name}`},400);const price=Number(i.variant_id?(i.variant_sale_price??i.variant_price):(i.sale_price??i.price));subtotal+=price*Number(i.quantity)}const settings=Object.fromEntries((await c.env.DB.prepare('SELECT key,value FROM settings').all()).results.map((r:any)=>[r.key,r.value]));let method=String(b.payment_method||'cod');let paymentMethod:any=null;let receiptUpload:any=null;if(method.startsWith('pm_')){paymentMethod=await c.env.DB.prepare('SELECT * FROM payment_methods WHERE id=? AND active=1').bind(Number(method.slice(3))).first();if(!paymentMethod)return json({error:'Payment method is currently unavailable'},400);if(paymentMethod.method_type==='cod')method='cod'}if(method==='cod'&&settings.cod_enabled!=='1')return json({error:'COD is disabled'},400);if(method!=='cod'){if(!paymentMethod)return json({error:'Payment method is currently unavailable'},400);if(!String(b.receipt_token||''))return json({error:'Please upload receipt before placing your order'},400);receiptUpload=await c.env.DB.prepare("SELECT * FROM receipt_uploads WHERE token=? AND user_id=? AND created_at>=datetime('now','-30 minutes')").bind(String(b.receipt_token),u.id).first();if(!receiptUpload)return json({error:'Receipt upload is missing or expired. Please upload the receipt again.'},400)}const db=c.env.DB;
-  // Reserve stock atomically per item before creating the order. If any reservation
-  // fails (lost a race to another checkout for the same stock), roll back the
-  // reservations already made and reject — this prevents an order being recorded
-  // against stock that was never actually deducted (oversell / stock-order mismatch).
-  const reserved:any[]=[];
-  for(const i of items){
-    const upd=i.variant_id
-      ? await db.prepare('UPDATE product_variants SET stock=stock-? WHERE id=? AND stock>=?').bind(i.quantity,i.variant_id,i.quantity).run()
-      : await db.prepare('UPDATE products SET stock=stock-?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND stock>=?').bind(i.quantity,i.product_id,i.quantity).run();
-    if(!upd.meta.changes){
-      for(const r of reserved){
-        if(r.variant_id) await db.prepare('UPDATE product_variants SET stock=stock+? WHERE id=?').bind(r.quantity,r.variant_id).run();
-        else await db.prepare('UPDATE products SET stock=stock+?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(r.quantity,r.product_id).run();
-      }
-      return json({error:`Insufficient stock for ${i.name}. Please refresh your cart and try again.`},409);
-    }
-    reserved.push(i);
+  // Reserve stock atomically per item before creating the order. All conditional
+  // decrements run as ONE D1 batch (a single SQL transaction); each keeps its
+  // stock>=quantity guard. A reservation matching 0 rows is not an error, so the
+  // batch can partially apply: any quantity actually reserved is then restored
+  // atomically and the checkout is rejected with 409 — this prevents an order being
+  // recorded against stock that was never actually deducted (oversell).
+  const reserveOps=items.map((i:any)=>i.variant_id
+    ? db.prepare('UPDATE product_variants SET stock=stock-? WHERE id=? AND stock>=?').bind(i.quantity,i.variant_id,i.quantity)
+    : db.prepare('UPDATE products SET stock=stock-?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND stock>=?').bind(i.quantity,i.product_id,i.quantity));
+  let reserveResults:any[]=[];
+  try{reserveResults=await db.batch(reserveOps)}catch(err){console.error('Stock reservation batch failed',err);return json({error:'Could not place the order. Please try again.'},500)}
+  // D1 returns one result per statement, in statement order; verify each reservation
+  // individually instead of assuming blanket success. Quantities whose result is
+  // missing or reports 0 changes are treated accordingly when restoring.
+  const restoreReserved=()=>{const ops:any[]=[];for(let n=0;n<items.length;n++){const changes=n<reserveResults.length?Number(reserveResults[n]?.meta?.changes||0):1;if(changes>0){const i=items[n];ops.push(i.variant_id?db.prepare('UPDATE product_variants SET stock=stock+? WHERE id=?').bind(i.quantity,i.variant_id):db.prepare('UPDATE products SET stock=stock+?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(i.quantity,i.product_id))}}return ops};
+  const verified=reserveResults.length===items.length;
+  const firstFail=verified?reserveResults.findIndex((r:any)=>Number(r?.meta?.changes||0)<1):-1;
+  if(!verified||firstFail>=0){
+    try{const ops=restoreReserved();if(ops.length)await db.batch(ops)}catch(re){console.error('Stock restore failed after lost reservation',re)}
+    if(firstFail>=0)return json({error:`Insufficient stock for ${items[firstFail].name}. Please refresh your cart and try again.`},409);
+    return json({error:'Could not place the order. Please try again.'},500);
   }
-  const quantity=items.reduce((n:any,i:any)=>n+Number(i.quantity),0);const fee=await deliveryFee(c,quantity,subtotal,method);const total=subtotal+fee;const seq:any=await db.prepare('UPDATE order_sequence SET next_number=next_number+1 WHERE id=1 RETURNING prefix,next_number-1 AS issued').first();const orderNo=`${seq?.prefix||'SS-'}${Number(seq?.issued||Date.now())}`;const order=await db.prepare('INSERT INTO orders(order_number,user_id,name,email,phone,address,city,province,postal_code,country,subtotal,delivery_fee,total,payment_method,payment_status,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(orderNo,u?.id||null,String(b.name),String(b.email).toLowerCase(),String(b.phone),String(b.address),String(b.city),String(b.province),String(b.postal_code||''),'Pakistan',subtotal,fee,total,method,method==='cod'?'Pending':'Submitted',method==='cod'?'Pending':'Payment Verification').run();await db.prepare("INSERT INTO tracking_events(order_id,status,title,description) VALUES(?,?,?,?)").bind(order.meta.last_row_id,method==='cod'?'Pending':'Payment Verification',method==='cod'?'Order received':'Payment submitted','Your order has been received by SHANO SHAN.').run();for(const i of items){const price=Number(i.variant_id?(i.variant_sale_price??i.variant_price):(i.sale_price??i.price));await db.prepare('INSERT INTO order_items(order_id,product_id,variant_id,name,sku,quantity,unit_price,line_total) VALUES(?,?,?,?,?,?,?,?)').bind(order.meta.last_row_id,i.product_id,i.variant_id,i.name,i.variant_id?i.variant_name:i.name,i.quantity,price,price*i.quantity).run();}const payment=await db.prepare('INSERT INTO payments(order_id,method,amount,status,reference,note) VALUES(?,?,?,?,?,?)').bind(order.meta.last_row_id,method,total,method==='cod'?'Pending':'Submitted',String(b.payment_reference||''),String(b.payment_note||'')).run();if(method!=='cod'&&receiptUpload){await db.prepare('INSERT INTO payment_receipts(payment_id,public_id,secure_url) VALUES(?,?,?)').bind(payment.meta.last_row_id,receiptUpload.public_id,receiptUpload.secure_url).run();await db.prepare('DELETE FROM receipt_uploads WHERE id=?').bind(receiptUpload.id).run()}await db.prepare('DELETE FROM cart_items WHERE cart_id=?').bind(row.id).run();if(u)await db.prepare('INSERT INTO notifications(user_id,title,body) VALUES(?,?,?)').bind(u.id,'Order placed',`Your order ${orderNo} has been placed.`).run();await notifyStaff(c,'New order received',`New ${method==='cod'?'COD':'advance payment'} order ${orderNo} from ${String(b.name)} — PKR ${total.toLocaleString()}.`);return json({order_number:orderNo,total,status:method==='cod'?'Pending':'Payment Verification'},201)});
+  const quantity=items.reduce((n:any,i:any)=>n+Number(i.quantity),0);const fee=await deliveryFee(c,quantity,subtotal,method);const total=subtotal+fee;const seq:any=await db.prepare('UPDATE order_sequence SET next_number=next_number+1 WHERE id=1 RETURNING prefix,next_number-1 AS issued').first();const orderNo=`${seq?.prefix||'SS-'}${Number(seq?.issued||Date.now())}`;
+  // Commit order, tracking event, items, payment, receipt and cart clearance as ONE
+  // D1 batch (a single SQL transaction): afterwards either all of it exists or none
+  // of it does. Generated ids are resolved inside the transaction from the unique
+  // order_number, so no schema changes are needed.
+  const commitOps=[
+    db.prepare('INSERT INTO orders(order_number,user_id,name,email,phone,address,city,province,postal_code,country,subtotal,delivery_fee,total,payment_method,payment_status,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(orderNo,u?.id||null,String(b.name),String(b.email).toLowerCase(),String(b.phone),String(b.address),String(b.city),String(b.province),String(b.postal_code||''),'Pakistan',subtotal,fee,total,method,method==='cod'?'Pending':'Submitted',method==='cod'?'Pending':'Payment Verification'),
+    db.prepare("INSERT INTO tracking_events(order_id,status,title,description) VALUES((SELECT id FROM orders WHERE order_number=?),?,?,?)").bind(orderNo,method==='cod'?'Pending':'Payment Verification',method==='cod'?'Order received':'Payment submitted','Your order has been received by SHANO SHAN.'),
+    ...items.map((i:any)=>{const price=Number(i.variant_id?(i.variant_sale_price??i.variant_price):(i.sale_price??i.price));return db.prepare('INSERT INTO order_items(order_id,product_id,variant_id,name,sku,quantity,unit_price,line_total) VALUES((SELECT id FROM orders WHERE order_number=?),?,?,?,?,?,?,?)').bind(orderNo,i.product_id,i.variant_id,i.name,i.variant_id?i.variant_name:i.name,i.quantity,price,price*i.quantity)}),
+    db.prepare('INSERT INTO payments(order_id,method,amount,status,reference,note) VALUES((SELECT id FROM orders WHERE order_number=?),?,?,?,?,?)').bind(orderNo,method,total,method==='cod'?'Pending':'Submitted',String(b.payment_reference||''),String(b.payment_note||'')),
+    ...(method!=='cod'&&receiptUpload?[
+      db.prepare('INSERT INTO payment_receipts(payment_id,public_id,secure_url) VALUES((SELECT p.id FROM payments p JOIN orders o ON o.id=p.order_id WHERE o.order_number=?),?,?)').bind(orderNo,receiptUpload.public_id,receiptUpload.secure_url),
+      db.prepare('DELETE FROM receipt_uploads WHERE id=?').bind(receiptUpload.id)
+    ]:[]),
+    db.prepare('DELETE FROM cart_items WHERE cart_id=?').bind(row.id)
+  ];
+  try{
+    await db.batch(commitOps);
+  }catch(err){
+    // The batch is transactional: no order/order_items/payment/receipt rows exist and
+    // the cart is untouched. Restore the reserved stock atomically and fail the request.
+    try{const ops=restoreReserved();if(ops.length)await db.batch(ops)}catch(re){console.error('Stock restore failed after order commit error',re)}
+    console.error('Order commit failed',orderNo,err);
+    return json({error:'Could not place the order. Please try again.'},500);
+  }
+  // Post-commit, non-critical: notification failures must not undo the committed order.
+  try{if(u)await db.prepare('INSERT INTO notifications(user_id,title,body) VALUES(?,?,?)').bind(u.id,'Order placed',`Your order ${orderNo} has been placed.`).run()}catch(e){console.error('Customer notification failed',orderNo,e)}
+  try{await notifyStaff(c,'New order received',`New ${method==='cod'?'COD':'advance payment'} order ${orderNo} from ${String(b.name)} — PKR ${total.toLocaleString()}.`)}catch(e){console.error('Staff notification failed',orderNo,e)}
+  return json({order_number:orderNo,total,status:method==='cod'?'Pending':'Payment Verification'},201)});
 app.get('/api/notifications',async c=>{const u=await userFromReq(c);if(!u)return json({notifications:[],unread:0},401);const rows=(await c.env.DB.prepare('SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 50').bind(u.id).all()).results;const unread=await c.env.DB.prepare('SELECT COUNT(*) n FROM notifications WHERE user_id=? AND read_at IS NULL').bind(u.id).first() as any;return json({notifications:rows,unread:Number(unread?.n||0)})});
 app.get('/api/admin/notifications',async c=>{const a=await requireStaff(c);if('error'in a)return json({error:a.error},a.status);const rows=(await c.env.DB.prepare('SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 50').bind(a.user.id).all()).results;const unread=await c.env.DB.prepare('SELECT COUNT(*) n FROM notifications WHERE user_id=? AND read_at IS NULL').bind(a.user.id).first() as any;return json({notifications:rows,unread:Number(unread?.n||0)})});
 app.patch('/api/admin/notifications/:id/read',async c=>{const a=await requireStaff(c);if('error'in a)return json({error:a.error},a.status);await c.env.DB.prepare('UPDATE notifications SET read_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?').bind(Number(c.req.param('id')),a.user.id).run();return json({ok:true})});
