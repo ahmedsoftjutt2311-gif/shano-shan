@@ -470,7 +470,11 @@ h2 em {
 }
 
 .product-image {
-  aspect-ratio: 1 / 1.18;
+  /* Portrait 4:5 stage, matching the product-detail stage. The source
+     canvases are square/1:1.33 portrait with ~20-25% baked white side
+     margins; the old 1/1.18 landscape stage pillarboxed them into a
+     floating white rectangle with dark strips on both sides. */
+  aspect-ratio: 4 / 5;
 
   background: #121212;
 
@@ -489,6 +493,15 @@ h2 em {
      `cover` scaled-to-fill and cropped tall/landscape bottles. */
   object-fit: contain;
   object-position: center center;
+
+  /* Bounded 1.1x zoom against the measured baked-in white canvas
+     (~20-25% side margins, >=2.6% top margin): at 4:5 the portrait
+     canvas bleeds only ~4.5% of its height (under its 6.6% blank top
+     margin) and the square canvas has NO vertical bleed below 1.25x,
+     so only blank canvas is clipped — every bottle pixel stays visible.
+     Re-measure future assets before raising this. */
+  transform: scale(1.1);
+  transform-origin: center center;
 }
 
 .product-image span,
@@ -2124,7 +2137,7 @@ body{touch-action:pan-y}
 html,body,#root{width:100%;max-width:100%;overflow-x:hidden}
 .shop{width:100%;max-width:100%;overflow:visible}
 .product-grid{width:100%;max-width:100%}
-@media(max-width:700px){.section{padding-left:16px;padding-right:16px}.shop{padding-left:16px;padding-right:16px}.shop-toolbar{width:100%;max-width:100%}.product-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.product-card{min-width:0;overflow:hidden}.product-card h3{font-size:clamp(14px,4vw,19px);line-height:1.18}.product-card strong{font-size:15px}.section-heading{padding-left:0;padding-right:0}.section-heading h2{line-height:1.08}.shop .product-image{aspect-ratio:1/1;min-height:0}.shop .product-info{padding:12px}.shop .product-card>a{min-width:0}}
+@media(max-width:700px){.section{padding-left:16px;padding-right:16px}.shop{padding-left:16px;padding-right:16px}.shop-toolbar{width:100%;max-width:100%}.product-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.product-card{min-width:0;overflow:hidden}.product-card h3{font-size:clamp(14px,4vw,19px);line-height:1.18}.product-card strong{font-size:15px}.section-heading{padding-left:0;padding-right:0}.section-heading h2{line-height:1.08}.shop .product-image{aspect-ratio:4/5;min-height:0}.shop .product-info{padding:12px}.shop .product-card>a{min-width:0}}
 
 .cart-variant{display:inline;font-size:.75em;color:#d6ad58;font-family:Inter,Arial,sans-serif;font-weight:500}
 
