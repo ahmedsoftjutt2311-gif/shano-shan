@@ -713,13 +713,26 @@ h2 em {
 .main-image {
   position: relative;
 
-  aspect-ratio: 1 / 1;
+  /* Portrait 4:5 stage: matches the tall bottle shots far better than the
+     old 1/1 square, which letterboxed the 1:1.33 canvas and left the
+     bottle (~52-60% of the canvas width) looking tiny and off-balance. */
+  aspect-ratio: 4 / 5;
 
   display: flex;
   align-items: center;
   justify-content: center;
 
-  padding: clamp(18px, 3.2vw, 42px);
+  /* The baked-in white studio canvas is the visual frame, so the stage
+     adds no inner padding of its own — padding here only shrank the
+     product inside an already margin-heavy source image. */
+  width: min(100%, 620px);
+
+  margin-inline: auto;
+
+  /* Clips the intentional canvas bleed (see the img zoom below) at the
+     rounded stage edge. Decorative only — the click/keyboard zoom
+     handler lives on this same element and is unaffected. */
+  overflow: hidden;
 
   background:
     radial-gradient(ellipse 72% 58% at 50% 38%, rgba(214, 173, 88, 0.1), transparent 62%),
@@ -762,11 +775,20 @@ h2 em {
   width: 100%;
   height: 100%;
 
-  /* Contain, never cover: the complete source shot — white studio
-     background included — stays fully visible, centered and undistorted,
-     matching the shop-grid fix. No filter may alter its colors. */
+  /* Contain, never cover: the complete source shot stays centered and
+     undistorted. No filter may alter its colors. */
   object-fit: contain;
   object-position: center center;
+
+  /* Bounded 1.08x zoom against the baked-in white canvas: the source
+     assets carry ~20-25% side margins and >=2.6% top/bottom margins
+     (measured), so at this scale only blank canvas bleeds past the stage
+     edge and is clipped — the bottle itself stays 100% visible with room
+     to spare (measured crop tolerances: 1.15x vertical / 1.31x for the
+     square shot). NEVER raise this without re-measuring future assets:
+     an image with <4% baked margins would start losing product edges. */
+  transform: scale(1.08);
+  transform-origin: center center;
 }
 
 .thumbs {
@@ -2030,7 +2052,7 @@ body{touch-action:pan-y}
 .image-lightbox{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.96);display:flex;align-items:center;justify-content:center;padding:24px;touch-action:pan-y}
 .image-lightbox img{max-width:96vw;max-height:90vh;width:auto;height:auto;object-fit:contain;user-select:none;-webkit-user-drag:none}
 .image-lightbox button{position:absolute;right:18px;top:18px;width:42px;height:42px;border:1px solid #5b4729;background:#0b0b0b;color:#fff;border-radius:50%;font-size:28px;line-height:1}
-@media(max-width:700px){body{font-size:14px}.section{padding-left:18px;padding-right:18px}.section h1{font-size:clamp(30px,9vw,48px)}.section h2{font-size:clamp(24px,7vw,36px)}.product-copy h1{font-size:clamp(30px,9vw,46px)}.variant-picker{border-radius:12px}.main-image{max-height:78vw}.image-lightbox{padding:12px}.image-lightbox img{max-width:98vw;max-height:84vh}}
+@media(max-width:700px){body{font-size:14px}.section{padding-left:18px;padding-right:18px}.section h1{font-size:clamp(30px,9vw,48px)}.section h2{font-size:clamp(24px,7vw,36px)}.product-copy h1{font-size:clamp(30px,9vw,46px)}.variant-picker{border-radius:12px}.main-image{max-height:132vw}.image-lightbox{padding:12px}.image-lightbox img{max-width:98vw;max-height:84vh}}
 
 /* Final responsive/tracking polish */
 html,body,#root{width:100%;min-width:0;max-width:100%;overflow-x:hidden}
