@@ -87,6 +87,11 @@ async function api(path: string, opt: any = {}) {
   const d = await r.json().catch(() => ({}));
 
   if (!r.ok) {
+    // An expired/invalid session should not leave a dead token in storage:
+    // every authenticated page would keep failing with "Login required".
+    if ((r.status === 401 || r.status === 403) && token && path !== "/api/auth/me") {
+      localStorage.removeItem("ss_customer_token");
+    }
     throw new Error(d.error || "Request failed");
   }
 
@@ -662,7 +667,9 @@ function ShanoAIWidget(){
       const x=await api("/api/ai/chat",{method:"POST",body:JSON.stringify({message:q,mode:"customer"})});
       setMessages(m=>[...m,{role:"assistant",text:x.reply||"I’m sorry, I couldn’t answer that right now."}]);
     }catch(e:any){
-      setMessages(m=>[...m,{role:"assistant",text:"I’m having trouble connecting right now. Please try again in a moment."}]);
+      // Surface the server's real message (login required, daily quota reached,
+      // temporary outage) instead of a generic failure for every case.
+      setMessages(m=>[...m,{role:"assistant",text:e?.message||"I’m having trouble connecting right now. Please try again in a moment."}]);
     }finally{setBusy(false)}
   };
 
@@ -785,7 +792,7 @@ function Product({slug}:{slug:string}) {
   if(!p)return <section className="section loading">Loading fragrance...</section>;
   const variant=selectedVariant, stock=variant?Number(variant.stock):Number(p.stock), price=variant?.sale_price??variant?.price??p.sale_price??p.price, minQ=Math.max(1,Number(p.min_quantity||1)), maxQ=Math.min(Number(p.max_quantity||99),stock||99);
   const buyNow=async()=>{await addToCart(p,qty,variant?.id);location.hash="#/checkout"};
-  return <section className="section product-detail"><div className="gallery"><div className="main-image" onClick={()=>img&&setZoom(true)} role={img?"button":undefined} tabIndex={img?0:undefined} onKeyDown={e=>{if(img&&(e.key==='Enter'||e.key===' '))setZoom(true)}}>{img?<img src={img} alt={p.name}/>:<span>SHANO SHAN</span>}</div><div className="thumbs">{variant?.image_url&&<button className="variant-thumb" key={`variant-${variant.id}`} onClick={()=>setImg(variant.image_url)} type="button"><img src={variant.image_url} alt={`${p.name} ${variant.name}`}/></button>}{p.images?.map((i:any)=><button key={i.id} onClick={()=>setImg(i.secure_url)} type="button"><img src={i.secure_url} alt={p.name}/></button>)}</div></div><div className="product-copy"><span className="eyebrow">{p.fragrance_family||p.gender||"SIGNATURE FRAGRANCE"}</span><h1>{p.name}</h1><div className="price">{money(price)}{variant?.sale_price&&<del>{money(variant.price)}</del>}</div>{p.rating>0&&<p>★★★★★ {Number(p.rating).toFixed(1)} · {p.review_count} ratings</p>}<ProductShare p={p}/><p>{p.short_description||p.description}</p>{p.variants?.length>0&&<div className="variant-picker"><div className="variant-title"><span className="eyebrow">SIZE / ML</span><b>Choose your size</b></div><div className="variant-grid">{p.variants.map((v:any)=><button key={v.id} className={selectedVariant?.id===v.id?"variant-option active":"variant-option"} disabled={!v.active||v.stock<=0} onClick={()=>{setSelectedVariant(v);setImg(v.image_url||p.images?.[0]?.secure_url||"");setZoom(false);setQty(Math.max(minQ,1))}} type="button"><strong>{v.name}</strong><span>{money(v.sale_price??v.price)}</span>{v.stock<=0&&<small>Out of stock</small>}</button>)}</div></div>}{stock<=0?<b className="sold">Out of stock</b>:<><div className="qty"><button onClick={()=>setQty(Math.max(minQ,qty-1))} type="button">−</button><b>{qty}</b><button onClick={()=>setQty(Math.min(maxQ,qty+1))} type="button">+</button></div><small>Minimum {minQ} · Maximum {maxQ}</small><button className="wide" onClick={()=>addToCart(p,qty,variant?.id)} type="button">ADD TO CART</button><button className="wide" onClick={buyNow} type="button">BUY NOW</button></>}{p.top_notes&&<div className="notes"><div><b>Top Notes</b><span>{p.top_notes}</span></div>{p.heart_notes&&<div><b>Heart Notes</b><span>{p.heart_notes}</span></div>}{p.base_notes&&<div><b>Base Notes</b><span>{p.base_notes}</span></div>}</div>}<button className="text-btn" onClick={()=>{if(!user){toast("Please log in to leave a review");return}setReview(!review)}} type="button">Write a review</button>{review&&<Review productId={p.id}/>}<div className="reviews"><h3>Customer Reviews</h3>{reviews.length?reviews.map((r:any)=><article key={r.id}><b>{"★".repeat(r.rating)}{"☆".repeat(5-r.rating)}</b><small>{r.name}{r.verified_purchase?" · Verified Purchase":""}</small><p>{r.body}</p></article>):<p>No approved reviews yet.</p>}</div></div>{zoom&&<div className="image-lightbox" role="dialog" aria-modal="true" onClick={()=>setZoom(false)}><button type="button" aria-label="Close image" onClick={()=>setZoom(false)}>×</button><img src={img} alt={p.name} onClick={e=>e.stopPropagation()}/></div>}</section>;
+  return <section className="section product-detail"><div className="gallery"><div className="main-image" onClick={()=>img&&setZoom(true)} role={img?"button":undefined} tabIndex={img?0:undefined} onKeyDown={e=>{if(img&&(e.key==='Enter'||e.key===' '))setZoom(true)}}>{img?<img src={img} alt={p.name}/>:<span>SHANO SHAN</span>}</div><div className="thumbs">{variant?.image_url&&<button className="variant-thumb" key={`variant-${variant.id}`} onClick={()=>setImg(variant.image_url)} type="button"><img src={variant.image_url} alt={`${p.name} ${variant.name}`}/></button>}{p.images?.map((i:any)=><button key={i.id} onClick={()=>setImg(i.secure_url)} type="button"><img src={i.secure_url} alt={p.name}/></button>)}</div></div><div className="product-copy"><span className="eyebrow">{p.fragrance_family||p.gender||"SIGNATURE FRAGRANCE"}</span><h1>{p.name}</h1><div className="price">{money(price)}{variant?.sale_price&&<del>{money(variant.price)}</del>}</div>{p.rating>0&&<p>★★★★★ {Number(p.rating).toFixed(1)} · {p.review_count} ratings</p>}<ProductShare p={p}/><p>{p.short_description||p.description}</p>{p.variants?.length>0&&<div className="variant-picker"><div className="variant-title"><span className="eyebrow">SIZE / ML</span><b>Choose your size</b></div><div className="variant-grid">{p.variants.map((v:any)=><button key={v.id} className={selectedVariant?.id===v.id?"variant-option active":"variant-option"} disabled={!v.active||v.stock<=0} onClick={()=>{setSelectedVariant(v);setImg(v.image_url||p.images?.[0]?.secure_url||"");setZoom(false);setQty(Math.max(minQ,1))}} type="button"><strong>{v.name}</strong><span>{money(v.sale_price??v.price)}</span>{v.stock<=0&&<small>Out of stock</small>}</button>)}</div></div>}{stock<=0?<b className="sold">Out of stock</b>:<><div className="qty"><button onClick={()=>setQty(Math.max(minQ,qty-1))} type="button">−</button><b>{qty}</b><button onClick={()=>setQty(Math.min(maxQ,qty+1))} type="button">+</button></div><small>Minimum {minQ} · Maximum {maxQ}</small><button className="wide" onClick={()=>addToCart(p,qty,variant?.id)} type="button">ADD TO CART</button><button className="wide" onClick={buyNow} type="button">BUY NOW</button></>}{p.top_notes&&<div className="notes"><div><b>Top Notes</b><span>{p.top_notes}</span></div>{p.heart_notes&&<div><b>Heart Notes</b><span>{p.heart_notes}</span></div>}{p.base_notes&&<div><b>Base Notes</b><span>{p.base_notes}</span></div>}</div>}<button className="text-btn" onClick={()=>{if(!user){toast("Please log in to leave a review");return}setReview(!review)}} type="button">Write a review</button>{review&&<Review productId={p.id}/>}{reviews.length>0&&<div className="notes"><div><b>Ratings Breakdown</b><span>{breakdown.map((b:any)=>`${b.rating}★ × ${b.count}`).join(" · ")}</span></div></div>}<div className="reviews"><h3>Customer Reviews</h3>{reviews.length?reviews.map((r:any)=><article key={r.id}><b>{"★".repeat(r.rating)}{"☆".repeat(5-r.rating)}</b><small>{r.name}{r.verified_purchase?" · Verified Purchase":""}</small><p>{r.body}</p></article>):<p>No approved reviews yet.</p>}</div></div>{zoom&&<div className="image-lightbox" role="dialog" aria-modal="true" onClick={()=>setZoom(false)}><button type="button" aria-label="Close image" onClick={()=>setZoom(false)}>×</button><img src={img} alt={p.name} onClick={e=>e.stopPropagation()}/></div>}</section>;
 }
 
 function ProductShare({p}:{p:any}){const {toast,site}=useStore();const [open,setOpen]=useState(false);const url=`${location.origin}${location.pathname}#/product/${encodeURIComponent(p.slug)}`;const native=async()=>{try{if((navigator as any).share)await (navigator as any).share({title:p.name,text:`${p.name} — SHANO SHAN Fragrance`,url});else{await navigator.clipboard.writeText(url);toast("Product link copied")}}catch{}};const social=(k:string)=>{const e=encodeURIComponent(url),t=encodeURIComponent(`${p.name} — SHANO SHAN Fragrance`);if(k==='copy'){navigator.clipboard?.writeText(url).then(()=>toast("Product link copied"));return}const l:any={whatsapp:`https://wa.me/?text=${t}%20${e}`,facebook:`https://www.facebook.com/sharer/sharer.php?u=${e}`,x:`https://twitter.com/intent/tweet?text=${t}&url=${e}`};window.open(l[k],"_blank","noopener,noreferrer,width=650,height=700")};return site?.settings?.show_share === "0" ? null : <div className="product-share"><span>SHARE</span><button type="button" onClick={()=>setOpen(v=>!v)}><Icon name="share" size={16}/> Share Product</button>{open&&<div className="product-share-menu"><button onClick={native}>Share</button><button onClick={()=>social('whatsapp')}><Icon name="whatsapp" size={15}/> WhatsApp</button><button onClick={()=>social('facebook')}><Icon name="facebook" size={15}/> Facebook</button><button onClick={()=>social('x')}><Icon name="x" size={15}/> X</button><button onClick={()=>social('copy')}><Icon name="copy" size={15}/> Copy link</button></div>}</div>}
@@ -871,6 +878,9 @@ function Cart() {
     refreshCart,
   } = useStore();
 
+  const [busyId, setBusyId] =
+    useState<number | null>(null);
+
   const items = cart.items || [];
 
   const subtotal = items.reduce(
@@ -882,6 +892,21 @@ function Cart() {
         Number(i.quantity),
     0
   );
+
+  const updateItem = async (id: number, run: () => Promise<any>) => {
+    if (busyId !== null) return;
+    setBusyId(id);
+    try {
+      await run();
+      await refreshCart();
+    } catch {
+      // Quantity changes can legitimately fail (stock limits) — the
+      // refresh below restores the server's authoritative quantities.
+      await refreshCart();
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <section className="section">
@@ -939,26 +964,27 @@ function Cart() {
 
                 <div className="qty">
                   <button
-                    onClick={async () => {
-                      await api(
-                        `/api/cart/items/${i.id}`,
-                        {
-                          method: "PATCH",
-                          body: JSON.stringify(
-                            {
-                              quantity:
-                                Math.max(
-                                  1,
-                                  i.quantity -
-                                    1
-                                ),
-                            }
-                          ),
-                        }
-                      );
-
-                      refreshCart();
-                    }}
+                    disabled={busyId === i.id}
+                    onClick={() =>
+                      updateItem(i.id, () =>
+                        api(
+                          `/api/cart/items/${i.id}`,
+                          {
+                            method: "PATCH",
+                            body: JSON.stringify(
+                              {
+                                quantity:
+                                  Math.max(
+                                    1,
+                                    i.quantity -
+                                      1
+                                  ),
+                              }
+                            ),
+                          }
+                        )
+                      )
+                    }
                     type="button"
                   >
                     −
@@ -967,23 +993,24 @@ function Cart() {
                   <b>{i.quantity}</b>
 
                   <button
-                    onClick={async () => {
-                      await api(
-                        `/api/cart/items/${i.id}`,
-                        {
-                          method: "PATCH",
-                          body: JSON.stringify(
-                            {
-                              quantity:
-                                i.quantity +
-                                1,
-                            }
-                          ),
-                        }
-                      );
-
-                      refreshCart();
-                    }}
+                    disabled={busyId === i.id}
+                    onClick={() =>
+                      updateItem(i.id, () =>
+                        api(
+                          `/api/cart/items/${i.id}`,
+                          {
+                            method: "PATCH",
+                            body: JSON.stringify(
+                              {
+                                quantity:
+                                  i.quantity +
+                                  1,
+                              }
+                            ),
+                          }
+                        )
+                      )
+                    }
                     type="button"
                   >
                     +
@@ -992,16 +1019,17 @@ function Cart() {
 
                 <button
                   className="remove"
-                  onClick={async () => {
-                    await api(
-                      `/api/cart/items/${i.id}`,
-                      {
-                        method: "DELETE",
-                      }
-                    );
-
-                    refreshCart();
-                  }}
+                  disabled={busyId === i.id}
+                  onClick={() =>
+                    updateItem(i.id, () =>
+                      api(
+                        `/api/cart/items/${i.id}`,
+                        {
+                          method: "DELETE",
+                        }
+                      )
+                    )
+                  }
                   type="button"
                 >
                   Remove
@@ -1107,6 +1135,7 @@ function Checkout() {
         body: JSON.stringify({...form,receipt_token:receiptToken,payment_reference:ref,payment_note:note}),
       });
 
+
       toast(
         "Order placed successfully"
       );
@@ -1157,11 +1186,12 @@ function Checkout() {
           {paymentMethods.map((m:any)=>{const value=m.method_type==='cod'?'cod':`pm_${m.id}`;return <label className="radio" key={m.id}><input type="radio" checked={form.payment_method===value} onChange={()=>setForm({...form,payment_method:value})}/>{m.name}</label>})}
           {paymentMethods.length===0&&<label className="radio"><input type="radio" checked={form.payment_method==="cod"} onChange={()=>setForm({...form,payment_method:"cod"})}/>Cash on Delivery</label>}
           {form.payment_method!=="cod"&&(()=>{const pm=paymentMethods.find((m:any)=>form.payment_method===`pm_${m.id}`);return <div className="manual-box"><h4>{pm?.name||"Online Payment"}</h4><p>Complete the payment using the store details below, then upload your receipt.</p>{pm?.account_title&&<div className="payment-detail"><span>Account Title</span><b>{pm.account_title}</b></div>}{pm?.account_number&&<div className="payment-detail"><span>Account Number</span><b>{pm.account_number}</b></div>}{pm?.phone_number&&<div className="payment-detail"><span>Phone / Wallet Number</span><b>{pm.phone_number}</b></div>}{pm?.bank_name&&<div className="payment-detail"><span>Bank Name</span><b>{pm.bank_name}</b></div>}{pm?.iban&&<div className="payment-detail"><span>IBAN</span><b>{pm.iban}</b></div>}{pm?.qr_url&&<img src={pm.qr_url} alt="Payment QR" className="receipt"/>}{pm?.instructions&&<p className="payment-instructions">{pm.instructions}</p>}<input placeholder="Payment reference" value={ref} onChange={e=>setRef(e.target.value)}/><textarea placeholder="Payment note" value={note} onChange={e=>setNote(e.target.value)}/><label className="receipt-required">Payment Receipt <strong>* Required</strong><input type="file" accept="image/*,.pdf" onChange={e=>setReceipt(e.target.files?.[0]||null)}/></label><small className="receipt-help">Please upload your payment receipt. The order cannot be placed without it.</small></div>})()}
-          {quote&&<><div className="sum-line"><span>Delivery</span><b>{money(quote.delivery_fee)}</b></div>{quote.cod_delivery_advance>0&&form.payment_method==="cod"&&<div className="cod-advance-note">COD delivery advance included: {money(quote.cod_delivery_advance)}</div>}</>}
+          {quote&&<><div className="sum-line"><span>Subtotal</span><b>{money(quote.subtotal)}</b></div><div className="sum-line"><span>Delivery</span><b>{money(quote.delivery_fee)}</b></div><div className="sum-line total"><span>Total</span><b>{money(quote.total)}</b></div>{quote.cod_delivery_advance>0&&form.payment_method==="cod"&&<div className="cod-advance-note">COD delivery advance included: {money(quote.cod_delivery_advance)}</div>}</>}
+          {cart.items?.length===0&&<p className="cart-empty-note">Your bag is empty. Add a fragrance before placing an order.</p>}
 
           <button
             className="wide"
-            disabled={busy}
+            disabled={busy||!(cart.items?.length)}
             onClick={submit}
             type="button"
           >
@@ -1192,7 +1222,8 @@ function OrderSummary({
     (n: any, i: any) =>
       n +
       Number(
-        i.sale_price ?? i.price
+        i.sale_price ??
+          i.price
       ) * i.quantity,
     0
   );
@@ -1251,6 +1282,12 @@ function Orders() {
   const [orders, setOrders] =
     useState<any[]>([]);
 
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState("");
+
   const { user } = useStore();
 
   useEffect(() => {
@@ -1258,7 +1295,10 @@ function Orders() {
       .then((x) =>
         setOrders(x.orders || [])
       )
-      .catch(() => {});
+      .catch((e: any) =>
+        setError(e?.message || "Unable to load your orders.")
+      )
+      .finally(() => setLoading(false));
   }, []);
 
   if (!user) {
@@ -1276,31 +1316,66 @@ function Orders() {
         title="My Orders"
       />
 
-      <div className="orders">
-        {orders.map((o) => (
-          <a
-            href={`#/order?id=${o.id}`}
-            className="order-card"
-            key={o.id}
+      {loading ? (
+        <div className="empty">
+          <p>Loading your orders…</p>
+        </div>
+      ) : error ? (
+        <div className="empty order-error">
+          <p>{error}</p>
+          <button
+            onClick={() => {
+              setError("");
+              setLoading(true);
+              api("/api/orders")
+                .then((x) => setOrders(x.orders || []))
+                .catch((e: any) => setError(e?.message || "Unable to load your orders."))
+                .finally(() => setLoading(false));
+            }}
+            type="button"
           >
-            <b>{o.order_number}</b>
+            Try Again
+          </button>
+        </div>
+      ) : !orders.length ? (
+        <div className="empty">
+          <p>You have not placed any orders yet.</p>
+          <button
+            onClick={() =>
+              (location.hash = "#/shop")
+            }
+            type="button"
+          >
+            Explore Fragrances
+          </button>
+        </div>
+      ) : (
+        <div className="orders">
+          {orders.map((o) => (
+            <a
+              href={`#/order?id=${o.id}`}
+              className="order-card"
+              key={o.id}
+            >
+              <b>{o.order_number}</b>
 
-            <span>
-              {new Date(
-                o.created_at
-              ).toLocaleString()}
-            </span>
+              <span>
+                {new Date(
+                  o.created_at
+                ).toLocaleString()}
+              </span>
 
-            <span>
-              {money(o.total)}
-            </span>
+              <span>
+                {money(o.total)}
+              </span>
 
-            <strong>
-              {o.status}
-            </strong>
-          </a>
-        ))}
-      </div>
+              <strong>
+                {o.status}
+              </strong>
+            </a>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -1339,14 +1414,21 @@ function OrderDetail() {
   const id = qs.get("id");
   const number = qs.get("number");
   const [data,setData]=useState<any>(null);
+  const [failed,setFailed]=useState("");
   const [file,setFile]=useState<File|null>(null);
   const [action,setAction]=useState("");
   const [reason,setReason]=useState("");
   const [returnFiles,setReturnFiles]=useState<File[]>([]);
   const [refund,setRefund]=useState<any>({refund_method:"Bank Transfer",refund_account_title:"",refund_account_number:"",refund_bank_name:"",refund_iban:"",refund_phone:"",refund_note:""});
   const {toast,site}=useStore();
-  const load=()=>{if(id)return api(`/api/orders/${id}`).then(setData).catch(()=>{});if(number)return api(`/api/orders/${encodeURIComponent(number)}`).then(setData).catch(()=>{})};
+  const load=()=>{
+    setFailed("");
+    const req=id?api(`/api/orders/${id}`):number?api(`/api/orders/${encodeURIComponent(number)}`):null;
+    if(!req)return;
+    req.then(setData).catch((e:any)=>setFailed(e?.message||"This order could not be loaded."));
+  };
   useEffect(()=>{load()},[id,number]);
+  if(failed)return <section className="section"><SectionHeading eyebrow="ORDER" title="Order Details"/><div className="empty order-error"><p>{failed}</p><button onClick={load} type="button">Try Again</button><button onClick={()=>{location.hash="#/orders"}} type="button">View My Orders</button></div></section>;
   if(!data)return <section className="section loading">Loading order...</section>;
   const o=data.order;
   const blocked=['Shipped','Out for Delivery','Cancelled','Returned','Refunded'];
