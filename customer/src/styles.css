@@ -711,20 +711,62 @@ h2 em {
 }
 
 .main-image {
+  position: relative;
+
   aspect-ratio: 1 / 1;
 
   display: flex;
   align-items: center;
   justify-content: center;
 
-  background: #101010;
+  padding: clamp(18px, 3.2vw, 42px);
+
+  background:
+    radial-gradient(ellipse 72% 58% at 50% 38%, rgba(214, 173, 88, 0.1), transparent 62%),
+    radial-gradient(ellipse 100% 86% at 50% 50%, #161512, #0a0a0a 92%);
+
+  border: 1px solid rgba(214, 173, 88, 0.14);
+  border-radius: 18px;
+
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.5),
+    0 4px 18px rgba(0, 0, 0, 0.4);
+
+  transition: box-shadow 0.35s ease, border-color 0.35s ease;
+}
+
+/* Cinematic vignette frame — pure decoration; never intercepts the
+   click-to-zoom handler living on .main-image itself. */
+.main-image::after {
+  content: "";
+
+  position: absolute;
+  inset: 0;
+
+  border-radius: inherit;
+
+  pointer-events: none;
+
+  background: radial-gradient(ellipse 108% 100% at 50% 46%, transparent 62%, rgba(0, 0, 0, 0.32));
+}
+
+.main-image:hover {
+  border-color: rgba(214, 173, 88, 0.32);
+
+  box-shadow:
+    0 40px 90px rgba(0, 0, 0, 0.55),
+    0 6px 24px rgba(0, 0, 0, 0.45);
 }
 
 .main-image img {
   width: 100%;
   height: 100%;
 
-  object-fit: cover;
+  /* Contain, never cover: the complete source shot — white studio
+     background included — stays fully visible, centered and undistorted,
+     matching the shop-grid fix. No filter may alter its colors. */
+  object-fit: contain;
+  object-position: center center;
 }
 
 .thumbs {
@@ -741,18 +783,33 @@ h2 em {
   width: 80px;
   height: 80px;
 
-  background: #111;
+  background: #101010;
 
-  padding: 0;
+  padding: 7px;
 
   border: 1px solid #292218;
+  border-radius: 12px;
+
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.thumbs button:hover {
+  border-color: #d6ad58;
+
+  transform: translateY(-2px);
+
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.45);
 }
 
 .thumbs img {
   width: 100%;
   height: 100%;
 
-  object-fit: cover;
+  /* Consistency with the stage: the whole image shows in every thumbnail. */
+  object-fit: contain;
+  object-position: center center;
+
+  border-radius: 7px;
 }
 
 .thumbs .variant-thumb { border-color:#d6ad58; box-shadow:0 0 0 1px rgba(214,173,88,.18) inset; }
@@ -762,15 +819,33 @@ h2 em {
     400 clamp(42px, 5vw, 68px) Georgia,
     serif;
 
-  margin: 12px 0;
+  line-height: 1.05;
+
+  margin: 12px 0 0;
+}
+
+/* Fading gold hairline beneath the title. */
+.product-copy h1::after {
+  content: "";
+
+  display: block;
+
+  width: 64px;
+  height: 1px;
+
+  margin: 22px 0 20px;
+
+  background: linear-gradient(90deg, #d6ad58, rgba(214, 173, 88, 0));
 }
 
 .price {
-  font-size: 20px;
+  font-size: 22px;
 
-  color: #d6ad58;
+  letter-spacing: 0.5px;
 
-  margin: 18px 0;
+  color: #e5c584;
+
+  margin: 0 0 18px;
 }
 
 .price del {
@@ -785,6 +860,23 @@ h2 em {
   color: #b4aea4;
 
   line-height: 1.8;
+
+  margin: 0 0 22px;
+}
+
+/* Rating line (the only <p> directly after the price). */
+.price + p {
+  font-size: 13px;
+
+  color: #d6ad58;
+
+  letter-spacing: 1px;
+
+  margin: 0 0 16px;
+}
+
+.product-share {
+  margin: 0 0 26px;
 }
 
 .qty {
@@ -792,30 +884,117 @@ h2 em {
 
   align-items: center;
 
-  gap: 20px;
+  gap: 8px;
 
-  margin: 25px 0;
+  margin: 22px 0 10px;
+}
+
+.qty > b {
+  min-width: 46px;
+
+  text-align: center;
+
+  font-size: 15px;
 }
 
 .qty button {
-  width: 35px;
-  height: 35px;
+  width: 38px;
+  height: 38px;
 
   background: #171411;
 
   color: #d6ad58;
+
+  border: 1px solid #3a2f21;
+  border-radius: 9px;
+
+  font-size: 16px;
+
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.qty button:hover {
+  border-color: #d6ad58;
+
+  background: #1e1913;
+}
+
+.qty button:active {
+  transform: scale(0.94);
+}
+
+.qty + small {
+  display: block;
+
+  color: #8d8579;
+
+  letter-spacing: 0.4px;
 }
 
 .wide {
   width: 100%;
 
   margin: 8px 0;
+
+  border-radius: 4px;
+
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+/* Primary CTA — solid gold with restrained lift. */
+.product-copy button.wide {
+  padding: 17px 25px;
+}
+
+.product-copy button.wide:hover {
+  background: #e3bd6b;
+
+  transform: translateY(-1px);
+
+  box-shadow: 0 14px 30px rgba(214, 173, 88, 0.16);
+}
+
+.product-copy button.wide:active {
+  transform: translateY(0);
+}
+
+.product-copy button.wide:focus-visible {
+  outline: 2px solid #d6ad58;
+
+  outline-offset: 3px;
+}
+
+.product-copy button.wide:disabled {
+  opacity: 0.45;
+
+  cursor: not-allowed;
+
+  transform: none;
+
+  box-shadow: none;
+}
+
+/* Secondary CTA (Buy Now, always adjacent to Add to Cart) — outlined gold. */
+.product-copy button.wide + button.wide {
+  background: transparent;
+
+  color: #d6ad58;
+
+  border: 1px solid rgba(214, 173, 88, 0.45);
+}
+
+.product-copy button.wide + button.wide:hover {
+  background: rgba(214, 173, 88, 0.08);
+
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
 }
 
 .notes {
   border-top: 1px solid #28231c;
 
-  margin-top: 35px;
+  margin-top: 38px;
+
+  padding-top: 8px;
 }
 
 .notes div {
@@ -844,6 +1023,48 @@ h2 em {
   margin-top: 10px;
 }
 
+.text-btn:hover {
+  color: #eecd83;
+}
+
+.reviews {
+  margin-top: 34px;
+}
+
+.reviews h3 {
+  font: 400 24px Georgia, serif;
+
+  margin: 0 0 16px;
+}
+
+.reviews article {
+  padding: 16px 0;
+
+  border-top: 1px solid #241f18;
+}
+
+.reviews article b {
+  color: #d6ad58;
+
+  letter-spacing: 2px;
+}
+
+.reviews article small {
+  display: block;
+
+  margin: 6px 0 10px;
+
+  color: #8d8579;
+}
+
+.reviews article p {
+  margin: 0;
+
+  color: #c9c2b6;
+
+  line-height: 1.7;
+}
+
 .review-form button {
   background: #d6ad58;
 
@@ -851,7 +1072,22 @@ h2 em {
 }
 
 .sold {
-  color: #b77;
+  display: inline-block;
+
+  margin: 14px 0;
+
+  padding: 9px 16px;
+
+  color: #d98a8a;
+
+  letter-spacing: 2px;
+
+  text-transform: uppercase;
+
+  font-size: 11px;
+
+  border: 1px solid rgba(187, 119, 119, 0.4);
+  border-radius: 999px;
 }
 
 /* =========================================================
@@ -1767,6 +2003,35 @@ body{touch-action:pan-y}
 
 .cart-button{margin-left:auto}
 @media(max-width:700px){.product-actions{padding:0 12px 12px}}
+
+/* 2026-09-29 product detail luxury polish: responsive refinements.
+   UI-only — stage, thumbs and purchase controls styling. */
+@media(max-width:700px){
+  .main-image{
+    border-radius:14px;
+
+    box-shadow:0 18px 44px rgba(0,0,0,.5);
+  }
+
+  .thumbs button{
+    width:64px;
+    height:64px;
+
+    padding:5px;
+  }
+
+  .thumbs img{
+    border-radius:6px;
+  }
+
+  .qty{
+    margin:18px 0 8px;
+  }
+
+  .product-copy button.wide{
+    padding:15px 18px;
+  }
+}
 
 /* 2026-09-24 production repair: prevent shop overflow/black-looking empty viewport on mobile */
 html,body,#root{width:100%;max-width:100%;overflow-x:hidden}
