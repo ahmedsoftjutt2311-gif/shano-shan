@@ -280,6 +280,12 @@ export function assessWhiteCanvasSuitability(img: DecodedPng): { ok: true; bg: [
   }
   const bg = sampleBorderColor(img);
   if (!bg) return { ok: false, reason: 'No uniform bright border found' };
+  // The sampled canvas itself must be near-white (a studio sweep, not a tinted
+  // or colored backdrop). Light-tinted and saturated canvases are skipped:
+  // removal is only proven-safe for near-white studio backgrounds.
+  if (luminance(bg[0], bg[1], bg[2]) < 230) {
+    return { ok: false, reason: 'Canvas is not near-white' };
+  }
   return { ok: true, bg };
 }
 
